@@ -75,7 +75,7 @@ const SUPABASE_KEY = 'sb_publishable_u9vum-h6roZid1UFmpW7Yw_EbZ-srT9';
 // =======================================================================
 
 const sb = (SUPABASE_URL.startsWith('http')) ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-const S = {user:null, hh:null, me:'', incomes:[], goals:[], plan:[], movs:[], tab:'resumen', q:null, edit:null, editInc:null, move:null};
+const S = {user:null, hh:null, me:'', members:[], who:'Todos', incomes:[], goals:[], plan:[], movs:[], tab:'resumen', q:null, edit:null, editInc:null, move:null};
 const ACCOUNTS = ['Banorte','Mercado Pago','Afore','Efectivo','Pago'];
 const KINDS = {fijo:'Gasto fijo', meta:'Meta de ahorro', pago:'Pago / deuda'};
 
@@ -100,13 +100,25 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 function fail(e){ console.error(e); toast(e?.message||String(e)); }
 const tagFor = a => `<span class="tag ${a==='Mercado Pago'?'mp':a==='Banorte'?'bn':a==='Pago'?'pg':''}">${esc(a)}</span>`;
 
+// ---------- personas ----------
+const people = () => [...S.members.map(m=>(m.display_name||'').split(' ')[0]).filter(Boolean), 'Compartido'];
+const mine = o => S.who==='Todos' || (o.owner||'Compartido')===S.who;
+function whoBar(){
+  return `<div style="display:flex;gap:6px;overflow-x:auto;margin:0 0 12px">${['Todos',...people()].map(p=>
+    `<button class="sm ${S.who===p?'':'sec'}" style="flex:none" onclick="S.who='${esc(p)}';render()">${esc(p)}</button>`).join('')}</div>`;
+}
+const ownerSel = (id,val) => `<select id="${id}">${people().map(p=>`<option ${val===p?'selected':''}>${esc(p)}</option>`).join('')}</select>`;
+const defOwner = () => S.who!=='Todos' ? S.who : ((S.me||'').split(' ')[0] || 'Compartido');
+
 // ---------- cálculos ----------
 const goalById = id => S.goals.find(g=>g.id===id);
 const goalBal = id => sum(S.movs.filter(m=>m.goal_id===id).map(m=>m.amount));
-const accBal = a => sum(S.movs.filter(m=>m.account===a).map(m=>m.amount));
-const activeGoals = () => S.goals.filter(g=>!g.archived);
-const incomeFor = q => S.incomes.filter(i=>(!i.start_date||i.start_date<=q)&&(!i.end_date||i.end_date>=q));
-const planFor = q => S.plan.filter(p=>p.quincena===q);
+const movMine = m => { if(S.who==='Todos') return true; const g=goalById(m.goal_id); return g ? mine(g) : false; };
+const accBal = a => sum(S.movs.filter(m=>m.account===a && movMine(m)).map(m=>m.amount));
+const accBalAll = a => sum(S.movs.filter(m=>m.account===a).map(m=>m.amount));
+const activeGoals = () => S.goals.filter(g=>!g.archived && mine(g));
+const incomeFor = q => S.incomes.filter(i=>mine(i)&&(!i.start_date||i.start_date<=q)&&(!i.end_date||i.end_date>=q));
+const planFor = q => S.plan.filter(p=>{ const g=goalById(p.goal_id); return p.quincena===q && g && !g.archived && mine(g); });
 const planOf = (gid,q) => S.plan.find(p=>p.goal_id===gid&&p.quincena===q);
 function projection(g){ // ¿en qué quincena llegas a la meta siguiendo el plan?
   if(!g.target) return null; let acc=goalBal(g.id); if(acc>=g.target-0.5) return 'ok';
@@ -133,10 +145,11 @@ async function loadAll(){
     sb.from('incomes').select('*').eq('household_id',h).order('created_at'),
     sb.from('goals').select('*').eq('household_id',h).order('sort').order('created_at'),
     sb.from('plan').select('*').eq('household_id',h),
-    sb.from('movements').select('*').eq('household_id',h).order('date',{ascending:false}).order('created_at',{ascending:false})
+    sb.from('movements').select('*').eq('household_id',h).order('date',{ascending:false}).order('created_at',{ascending:false}),
+    sb.from('members').select('user_id,display_name').eq('household_id',h)
   ]);
   for(const x of r) if(x.error) throw x.error;
-  [S.hh,S.incomes,S.goals,S.plan,S.movs] = r.map(x=>x.data);
+  [S.hh,S.incomes,S.goals,S.plan,S.movs,S.members] = r.map(x=>x.data);
 }
 async function refresh(){ try{ await loadAll(); render(); }catch(e){ fail(e); } }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&S.hh) refresh(); });
@@ -144,7 +157,7 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&S.hh) re
 function render(){
   $('#nav').hidden=false;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab));
-  $('#app').innerHTML = ({resumen:vResumen,quincena:vQuincena,metas:vMetas,ingresos:vIngresos,movs:vMovs}[S.tab])();
+  $('#app').innerHTML = ({resumen:vResumen,quincena:vQuincena,metas:vMetas,ingresos:vIngresos,movs:vMovs,hogar:vHogar}[S.tab])();
 }
 function go(t){ S.tab=t; S.edit=S.editInc=S.move=null; render(); scrollTo(0,0); }
 
@@ -183,31 +196,39 @@ async function logout(){ await sb.auth.signOut(); Object.assign(S,{user:null,hh:
 function vResumen(){
   const q=currentQ(), inc=sum(incomeFor(q).map(i=>i.amount)), pq=planFor(q);
   const asg=sum(pq.map(p=>p.amount)), hecho=sum(pq.filter(p=>p.done).map(p=>p.amount));
-  const tope=+S.hh.mp_tope, mp=accBal('Mercado Pago');
+  const tope=+S.hh.mp_tope, mp=accBalAll('Mercado Pago');
   const accs=['Banorte','Mercado Pago','Afore','Efectivo'].filter(a=>a==='Mercado Pago'||a==='Banorte'||Math.abs(accBal(a))>0.5);
   const guardado=sum(accs.map(accBal));
   const metas=activeGoals().filter(g=>g.kind!=='fijo');
   const fijos=activeGoals().filter(g=>g.kind==='fijo');
-  return `<h1>Hola${S.me?', '+esc(S.me):''} 👋</h1>
-  <div class="card"><h2>Quincena ${fmtD(q)}</h2>
-    <div class="row"><span>Ingresa</span><b>${money(inc)}</b></div>
-    <div class="row"><span>Planeado</span><b>${money(asg)}</b></div>
-    <div class="row"><span>Ya apartado</span><b class="pos">${money(hecho)}</b></div>
-    <div class="row"><span>Sin asignar</span><b class="${inc-asg<0?'neg':''}">${money(inc-asg)}</b></div>
+  return `<div class="row"><h1>Hola${S.me?', '+esc(S.me.split(' ')[0]):''} 👋</h1><button class="sec sm" onclick="go('hogar')">⚙️ Hogar</button></div>
+  ${whoBar()}
+  <div class="card"><h2>Quincena ${fmtD(q)}${S.who!=='Todos'?' · '+esc(S.who):''}</h2>
+    <div class="row"><span>Entra</span><b>${money(inc)}</b></div>
+    <div class="row"><span>Repartido en el plan</span><b>${money(asg)}</b></div>
+    <div class="row"><span>Ya apartado de verdad</span><b class="pos">${money(hecho)}</b></div>
+    <div class="row"><span>Falta repartir</span><b class="${inc-asg<0?'neg':''}">${money(inc-asg)}</b></div>
     <button class="sec full" style="margin-top:12px" onclick="S.q=currentQ();go('quincena')">Ir a la quincena</button></div>
   <div class="card"><h2>Dónde está el dinero</h2>
     <div class="big">${money(guardado)}</div><div class="mu">guardado en total</div>
     ${accs.map(a=>{ const v=accBal(a); return `<div class="row"><span>${tagFor(a)}</span><b>${money(v)}</b></div>`+
-      (a==='Mercado Pago'?`<div class="bar ${v>tope?'over':v>=tope-0.5?'full':''}"><i style="width:${Math.min(100,v/tope*100)}%"></i></div><div class="mu">${v>tope?'⚠️ Pasaste el tope de ':'Tope '}${money(tope)} · libre ${money(Math.max(0,tope-v))}</div>`:''); }).join('')}
+      (a==='Mercado Pago'?`<div class="bar ${mp>tope?'over':mp>=tope-0.5?'full':''}"><i style="width:${Math.min(100,mp/tope*100)}%"></i></div><div class="mu">${mp>tope?'⚠️ Pasaste el tope de ':'Tope '}${money(tope)} · lleva ${money(mp)} entre los dos · libre ${money(Math.max(0,tope-mp))}</div>`:''); }).join('')}
   </div>
   <div class="card"><h2>Metas</h2>${metas.length?metas.map(gGoal).join(''):'<p class="mu">Aún no hay metas.</p>'}</div>
-  ${fijos.length?`<div class="card"><h2>Gastos fijos (saldo)</h2>${fijos.map(g=>`<div class="row"><span>${esc(g.name)} ${tagFor(g.account)}</span><b>${money(goalBal(g.id))}</b></div>`).join('')}</div>`:''}
-  <div class="card"><h2>Hogar</h2>
-    <div class="row"><span>Código para invitar</span><span class="code">${esc(S.hh.invite_code)}</span></div>
-    <label>Tope de Mercado Pago</label>
+  ${fijos.length?`<div class="card"><h2>Gastos fijos (saldo)</h2>${fijos.map(g=>`<div class="row"><span>${esc(g.name)} ${tagFor(g.account)}</span><b>${money(goalBal(g.id))}</b></div>`).join('')}</div>`:''}`;
+}
+function vHogar(){
+  const tope=+S.hh.mp_tope;
+  return `<div class="row"><h1>⚙️ Hogar</h1><button class="sec sm" onclick="go('resumen')">‹ Volver</button></div>
+  <div class="card"><h2>${esc(S.hh.name)}</h2>
+    ${S.members.map(m=>`<div class="row"><span>👤 ${esc(m.display_name||'Sin nombre')}</span>${m.user_id===S.user.id?'<span class="tag">tú</span>':''}</div>`).join('')}
+    <div class="row" style="margin-top:14px"><span>Código para invitar</span><span class="code">${esc(S.hh.invite_code)}</span></div></div>
+  <div class="card"><h2>Mercado Pago</h2>
+    <label>Tope que deja apartar con rendimiento</label>
     <div class="row"><input id="tope" type="number" inputmode="decimal" value="${tope}"><button class="sm" onclick="saveTope()">Guardar</button></div>
-    ${!S.goals.length?`<button class="full" style="margin-top:12px" onclick="seed()">⚡ Cargar mi plan (oct 26 – jul 27)</button>`:''}
-    <button class="gh full" style="margin-top:8px" onclick="logout()">Cerrar sesión</button></div>`;
+    <div class="mu" style="margin-top:6px">Hoy hay ${money(accBalAll('Mercado Pago'))} entre los dos.</div></div>
+  ${!S.goals.length?`<div class="card"><button class="full" onclick="seed()">⚡ Cargar plan de Edgar (oct 26 – jul 27)</button></div>`:''}
+  <button class="dg full" onclick="logout()">Cerrar sesión</button>`;
 }
 function gGoal(g){
   const bal=goalBal(g.id), t=+g.target||0, pct=t?Math.min(100,bal/t*100):0, pr=projection(g);
@@ -221,11 +242,12 @@ async function saveTope(){ const v=parseFloat($('#tope').value)||0; const {error
 // ---------- QUINCENA ----------
 function vQuincena(){
   const q=S.q, incs=incomeFor(q), inc=sum(incs.map(i=>i.amount));
-  const gs=activeGoals(), asg=sum(planFor(q).filter(p=>goalById(p.goal_id)&&!goalById(p.goal_id).archived).map(p=>p.amount));
+  const gs=activeGoals(), asg=sum(planFor(q).map(p=>p.amount));
   const ord={fijo:0,pago:1,meta:2};
   return `<div class="row" style="margin:6px 0 12px"><button class="sec sm" onclick="S.q=shiftQ(S.q,-1);render()">‹</button>
       <h1 style="margin:0">${fmtD(q)}${q===currentQ()?' <span class="tag">actual</span>':''}</h1>
       <button class="sec sm" onclick="S.q=shiftQ(S.q,1);render()">›</button></div>
+  ${whoBar()}
   <div class="card"><h2>Ingresos</h2>${incs.length?incs.map(i=>`<div class="row"><span>${esc(i.name)}${i.end_date?` <span class="mu">hasta ${fmtD(i.end_date)}</span>`:''}</span><b>${money(i.amount)}</b></div>`).join(''):'<p class="mu">Sin ingresos en esta quincena</p>'}</div>
   <div class="card"><h2>Reparto</h2>
     ${gs.length?[...gs].sort((a,b)=>ord[a.kind]-ord[b.kind]).map(g=>{ const p=planOf(g.id,q), amt=p?+p.amount:0;
@@ -233,8 +255,8 @@ function vQuincena(){
         <input type="number" inputmode="decimal" value="${amt||''}" placeholder="0" ${p&&p.done?'disabled':''} onchange="setPlan('${g.id}',this.value)">
         ${p&&p.done?`<button class="sm done" onclick="undoDone('${p.id}')">✓ Hecho</button>`:`<button class="sm sec" ${!amt?'disabled':''} onclick="markDone('${p?p.id:''}')">Apartar</button>`}</div>`; }).join(''):'<p class="mu">Crea metas en la pestaña 🎯</p>'}
     <button class="gh full" style="margin-top:8px" onclick="copyPrev()">Copiar montos de la quincena anterior</button></div>
-  <div class="card sticky"><div class="grid2"><div><div class="mu">Ingresa</div><b>${money(inc)}</b></div><div><div class="mu">Asignado</div><b>${money(asg)}</b></div></div>
-    <div class="row" style="margin-top:8px"><span>Sin asignar</span><b class="${inc-asg<0?'neg':inc-asg>0?'warn':'pos'}">${money(inc-asg)}</b></div></div>`;
+  <div class="card sticky"><div class="grid2"><div><div class="mu">Entra</div><b>${money(inc)}</b></div><div><div class="mu">Ya repartido</div><b>${money(asg)}</b></div></div>
+    <div class="row" style="margin-top:8px"><span>${inc-asg<0?'Te pasaste por':'Falta repartir'}</span><b class="${inc-asg<0?'neg':inc-asg>0?'warn':'pos'}">${money(Math.abs(inc-asg))}${inc-asg===0?' ✓':''}</b></div></div>`;
 }
 async function setPlan(gid,val){
   const amount=parseFloat(val)||0;
@@ -246,7 +268,7 @@ async function markDone(pid){
   let rows=[];
   const base={household_id:S.hh.id,goal_id:g.id,plan_id:p.id,date:todayISO(),note:'Quincena '+fmtD(p.quincena)};
   if(g.account==='Mercado Pago'){ // llena Mercado Pago hasta el tope; lo que sobra va a Banorte
-    const room=Math.max(0,+S.hh.mp_tope-accBal('Mercado Pago')), inMP=Math.min(room,amt), rest=amt-inMP;
+    const room=Math.max(0,+S.hh.mp_tope-accBalAll('Mercado Pago')), inMP=Math.min(room,amt), rest=amt-inMP;
     if(inMP>0) rows.push({...base,account:'Mercado Pago',amount:inMP});
     if(rest>0) rows.push({...base,account:'Banorte',amount:rest,note:base.note+' (excedente del tope MP)'});
     if(rest>0) toast(`Mercado Pago lleno: ${money(rest)} van a Banorte`);
@@ -270,21 +292,24 @@ async function copyPrev(){
 
 // ---------- METAS ----------
 function vMetas(){
-  const e=S.edit==='new'?{kind:'meta',account:'Banorte'}:S.edit?goalById(S.edit):null;
+  const e=S.edit==='new'?{kind:'meta',account:'Banorte',owner:defOwner()}:S.edit?goalById(S.edit):null;
   const list=activeGoals();
   return `<div class="row"><h1>Metas y apartados</h1><button class="sm" onclick="S.edit='new';S.move=null;render()">+ Nueva</button></div>
+  ${whoBar()}
   ${e?`<div class="card"><h2>${S.edit==='new'?'Nueva':'Editar'}</h2>
-    <label>Nombre</label><input id="g_name" value="${esc(e.name)}">
+    <div class="grid2"><div><label>Nombre</label><input id="g_name" value="${esc(e.name)}"></div>
+    <div><label>De quién</label>${ownerSel('g_owner',e.owner||'Compartido')}</div></div>
     <div class="grid2"><div><label>Tipo</label><select id="g_kind">${Object.entries(KINDS).map(([k,v])=>`<option value="${k}" ${e.kind===k?'selected':''}>${v}</option>`).join('')}</select></div>
     <div><label>Dónde se guarda</label><select id="g_acc">${ACCOUNTS.map(a=>`<option ${e.account===a?'selected':''}>${a}</option>`).join('')}</select></div></div>
     <div class="grid2"><div><label>Meta $ (opcional)</label><input id="g_target" type="number" inputmode="decimal" value="${e.target??''}"></div>
     <div><label>Fecha meta</label><input id="g_due" type="date" value="${e.due_date??''}"></div></div>
     <label>Orden</label><input id="g_sort" type="number" value="${e.sort??0}">
     <div class="grid2" style="margin-top:12px"><button onclick="saveGoal()">Guardar</button><button class="sec" onclick="S.edit=null;render()">Cancelar</button></div>
-    ${S.edit!=='new'?`<button class="dg full" style="margin-top:10px" onclick="archiveGoal('${e.id}')">Archivar</button>`:''}</div>`:''}
+    ${S.edit!=='new'?`<div class="grid2" style="margin-top:10px"><button class="sec" onclick="archiveGoal('${e.id}')">Archivar</button><button class="dg" onclick="delGoal('${e.id}')">🗑 Borrar</button></div>
+    <div class="mu" style="margin-top:6px">Archivar: la quita del reparto pero guarda su historial. Borrar: la elimina con su plan.</div>`:''}</div>`:''}
   <div class="card">${list.length?list.map(g=>{ const bal=goalBal(g.id);
     return `<div class="goal"><div class="row"><span class="b">${esc(g.name)} ${tagFor(g.account)}</span><b>${money(bal)}</b></div>
-      <div class="row mu" style="margin-top:2px"><span>${KINDS[g.kind]}${g.target?' · meta '+money(g.target):''}${g.due_date?' · '+fmtD(g.due_date):''}</span>
+      <div class="row mu" style="margin-top:2px"><span>${S.who==='Todos'?esc(g.owner||'Compartido')+' · ':''}${KINDS[g.kind]}${g.target?' · meta '+money(g.target):''}${g.due_date?' · '+fmtD(g.due_date):''}</span>
       <span><button class="gh sm" onclick="S.move='${g.id}';S.edit=null;render()">Mover $</button><button class="gh sm" onclick="S.edit='${g.id}';S.move=null;render()">Editar</button></span></div>
       ${S.move===g.id?vMove(g):''}</div>`; }).join(''):'<p class="mu">Sin metas. En Resumen puedes cargar tu plan.</p>'}</div>`;
 }
@@ -298,7 +323,7 @@ function vMove(g){
     <div class="grid2" style="margin-top:10px"><button onclick="saveMove('${g.id}')">Guardar</button><button class="sec" onclick="S.move=null;render()">Cancelar</button></div></div>`;
 }
 async function saveGoal(){
-  const row={household_id:S.hh.id,name:$('#g_name').value.trim(),kind:$('#g_kind').value,account:$('#g_acc').value,
+  const row={household_id:S.hh.id,name:$('#g_name').value.trim(),owner:$('#g_owner').value,kind:$('#g_kind').value,account:$('#g_acc').value,
     target:parseFloat($('#g_target').value)||null,due_date:$('#g_due').value||null,sort:parseInt($('#g_sort').value)||0};
   if(!row.name) return toast('Ponle nombre');
   const r = S.edit==='new' ? await sb.from('goals').insert(row) : await sb.from('goals').update(row).eq('id',S.edit);
@@ -306,6 +331,9 @@ async function saveGoal(){
 }
 async function archiveGoal(id){ if(!confirm('¿Archivar? Deja de aparecer en el reparto.')) return;
   const {error}=await sb.from('goals').update({archived:true}).eq('id',id); if(error) return fail(error); S.edit=null; refresh(); }
+async function delGoal(id){
+  const g=goalById(id); if(!confirm(`¿Borrar "${g?g.name:''}"? Se borra su plan; sus movimientos quedan en el historial sin meta.`)) return;
+  const {error}=await sb.from('goals').delete().eq('id',id); if(error) return fail(error); S.edit=null; toast('Borrada'); refresh(); }
 async function saveMove(gid){
   const amt=(parseFloat($('#m_amt').value)||0)*(+$('#m_dir').value); if(!amt) return toast('Pon un monto');
   const {error}=await sb.from('movements').insert({household_id:S.hh.id,goal_id:gid,account:$('#m_acc').value,amount:amt,date:$('#m_date').value||todayISO(),note:$('#m_note').value.trim()||null});
@@ -314,20 +342,23 @@ async function saveMove(gid){
 
 // ---------- INGRESOS ----------
 function vIngresos(){
-  const e=S.editInc==='new'?{}:S.editInc?S.incomes.find(i=>i.id===S.editInc):null;
+  const e=S.editInc==='new'?{owner:defOwner()}:S.editInc?S.incomes.find(i=>i.id===S.editInc):null;
+  const incs=S.incomes.filter(mine);
   return `<div class="row"><h1>Ingresos</h1><button class="sm" onclick="S.editInc='new';render()">+ Nuevo</button></div>
-  ${e?`<div class="card"><label>Concepto</label><input id="i_name" value="${esc(e.name)}">
+  ${whoBar()}
+  ${e?`<div class="card"><div class="grid2"><div><label>Concepto</label><input id="i_name" value="${esc(e.name)}"></div>
+    <div><label>De quién</label>${ownerSel('i_owner',e.owner||'Compartido')}</div></div>
     <label>Monto por quincena</label><input id="i_amt" type="number" inputmode="decimal" value="${e.amount??''}">
     <div class="grid2"><div><label>Desde (opcional)</label><input id="i_start" type="date" value="${e.start_date??''}"></div>
     <div><label>Hasta (opcional)</label><input id="i_end" type="date" value="${e.end_date??''}"></div></div>
     <div class="grid2" style="margin-top:12px"><button onclick="saveInc()">Guardar</button><button class="sec" onclick="S.editInc=null;render()">Cancelar</button></div>
     ${S.editInc!=='new'?`<button class="dg full" style="margin-top:10px" onclick="delInc('${e.id}')">Eliminar</button>`:''}</div>`:''}
-  <div class="card">${S.incomes.length?S.incomes.map(i=>`<div class="row"><span><b>${esc(i.name)}</b><br><span class="mu">${i.start_date?'desde '+fmtD(i.start_date)+' ':''}${i.end_date?'hasta '+fmtD(i.end_date):'sin fecha de fin'}</span></span>
+  <div class="card">${incs.length?incs.map(i=>`<div class="row"><span><b>${esc(i.name)}</b><br><span class="mu">${S.who==='Todos'?esc(i.owner||'Compartido')+' · ':''}${i.start_date?'desde '+fmtD(i.start_date)+' ':''}${i.end_date?'hasta '+fmtD(i.end_date):'sin fecha de fin'}</span></span>
     <span><b>${money(i.amount)}</b> <button class="gh sm" onclick="S.editInc='${i.id}';render()">Editar</button></span></div>`).join(''):'<p class="mu">Sin ingresos</p>'}
     <div class="row" style="border-top:1px solid var(--ln);padding-top:10px;margin-top:10px"><span>Esta quincena</span><b>${money(sum(incomeFor(currentQ()).map(i=>i.amount)))}</b></div></div>`;
 }
 async function saveInc(){
-  const row={household_id:S.hh.id,name:$('#i_name').value.trim(),amount:parseFloat($('#i_amt').value)||0,start_date:$('#i_start').value||null,end_date:$('#i_end').value||null};
+  const row={household_id:S.hh.id,name:$('#i_name').value.trim(),owner:$('#i_owner').value,amount:parseFloat($('#i_amt').value)||0,start_date:$('#i_start').value||null,end_date:$('#i_end').value||null};
   if(!row.name) return toast('Ponle nombre');
   const r = S.editInc==='new' ? await sb.from('incomes').insert(row) : await sb.from('incomes').update(row).eq('id',S.editInc);
   if(r.error) return fail(r.error); S.editInc=null; refresh();
@@ -336,7 +367,8 @@ async function delInc(id){ if(!confirm('¿Eliminar ingreso?')) return; const {er
 
 // ---------- MOVIMIENTOS ----------
 function vMovs(){
-  return `<h1>Movimientos</h1><div class="card">${S.movs.length?S.movs.slice(0,200).map(m=>{ const g=goalById(m.goal_id);
+  const ms=S.movs.filter(movMine);
+  return `<h1>Movimientos</h1>${whoBar()}<div class="card">${ms.length?ms.slice(0,200).map(m=>{ const g=goalById(m.goal_id);
     return `<div class="goal"><div class="row"><span><b>${esc(g?g.name:'—')}</b> ${tagFor(m.account)}</span><b class="${m.amount<0?'neg':'pos'}">${money(m.amount)}</b></div>
       <div class="row mu"><span>${fmtD(m.date)}${m.note?' · '+esc(m.note):''}</span><button class="gh sm" onclick="delMov('${m.id}')">Borrar</button></div></div>`; }).join(''):'<p class="mu">Aún no hay movimientos. Se crean al tocar “Apartar” en la quincena.</p>'}</div>`;
 }
@@ -353,8 +385,8 @@ async function seed(){
     ['Pintura camioneta','meta','Banorte',14000,'2026-11-30'],['Préstamo mamá Moni','pago','Banorte',20000,'2026-12-30'],
     ['Navidad','meta','Banorte',6000,'2026-12-15'],
     ['Fondo médico','meta','Mercado Pago',60000,'2027-07-15'],['Fondo libre','meta','Mercado Pago',45000,'2027-07-15'],['Retiro','meta','Mercado Pago',null,null]
-  ].map(([name,kind,account,target,due_date],i)=>({household_id:h,name,kind,account,target,due_date,sort:i}));
-  const a=await sb.from('incomes').insert(inc.map(x=>({household_id:h,...x}))); if(a.error) return fail(a.error);
+  ].map(([name,kind,account,target,due_date],i)=>({household_id:h,owner:'Edgar',name,kind,account,target,due_date,sort:i}));
+  const a=await sb.from('incomes').insert(inc.map(x=>({household_id:h,owner:'Edgar',...x}))); if(a.error) return fail(a.error);
   const b=await sb.from('goals').insert(G).select(); if(b.error) return fail(b.error);
   const id=Object.fromEntries(b.data.map(g=>[g.name,g.id]));
   const N2=['Fondo médico','Fondo libre'];
