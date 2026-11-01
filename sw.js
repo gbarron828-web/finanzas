@@ -1,11 +1,15 @@
-// Guarda la app en el teléfono para que abra sin internet
-const CACHE = 'finanzas-v3';
-const LOCAL = ['./', './index.html', './icon.png'];
-const CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+// Guarda la app en el teléfono para que abra rápido y sin internet
+const CACHE = 'finanzas-v6';
+const LOCAL = ['./', './index.html', './icon.png', './logo.svg'];
+const LIBS = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js'
+];
+const WAIT_MS = 3500; // si la red tarda más que esto, se usa lo guardado
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(LOCAL).then(() =>
-    fetch(CDN).then(r => r.ok && c.put(CDN, r)).catch(() => {}))));
+    Promise.all(LIBS.map(u => fetch(u, {mode: 'cors'}).then(r => r.ok && c.put(u, r)).catch(() => {}))))));
   self.skipWaiting();
 });
 
@@ -14,14 +18,24 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Primero internet (para tener siempre la última versión); si no hay, lo guardado
+function fromNet(req) {
+  return fetch(req).then(r => {
+    if (r.ok || r.type === 'opaque') { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); }
+    return r;
+  });
+}
+
+// Red primero (para tener la última versión), pero si tarda o falla, lo guardado
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.hostname.endsWith('supabase.co')) return;
-  e.respondWith(
-    fetch(e.request).then(r => {
-      if (r.ok) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); }
-      return r;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
-  );
+  e.respondWith(new Promise(resolve => {
+    let done = false;
+    const finish = r => { if (!done && r) { done = true; resolve(r); } };
+    const t = setTimeout(() => caches.match(e.request, {ignoreVary: true}).then(finish), WAIT_MS);
+    fromNet(e.request).then(r => { clearTimeout(t); finish(r); })
+      .catch(() => caches.match(e.request, {ignoreVary: true})
+        .then(c => c || (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()))
+        .then(r => { clearTimeout(t); finish(r); }));
+  }));
 });
