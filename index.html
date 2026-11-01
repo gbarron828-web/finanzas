@@ -86,8 +86,16 @@ nav .fab{flex:none;width:60px;height:60px;border-radius:50%;background:linear-gr
 .empty span{font-size:40px;display:block;margin-bottom:6px}
 .sect{font-size:13px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin:16px 4px 8px}
 
-.track{position:relative;margin-top:28px}
-.pups{position:absolute;bottom:5px;transform:translateX(-100%);display:flex;gap:1px;pointer-events:none}
+.track{position:relative;margin-top:40px}
+.pups{position:absolute;bottom:5px;transform:translateX(-100%);display:flex;gap:1px;align-items:flex-end;pointer-events:none}
+.hum{width:22px;height:36px;animation:hop .34s ease-in-out infinite alternate;animation-delay:.08s;margin-right:-2px}
+.hum .lg,.hum .arm{transform-box:fill-box;transform-origin:50% 0;animation:leg .34s ease-in-out infinite alternate}
+.hum .lg.b,.hum .arm.b{animation-direction:alternate-reverse}
+.hum.sit,.hum.sit .lg,.hum.sit .arm{animation:none}
+.pups.done .hum{animation:cheer .6s ease-in-out infinite alternate}
+.pups .heart{position:absolute;top:-14px;left:34%;font-size:14px;animation:pop 1.2s ease-in-out infinite}
+@keyframes cheer{to{transform:translateY(-4px)}}
+@keyframes pop{0%{transform:translate(-50%,0) scale(.7);opacity:.6}50%{transform:translate(-50%,-6px) scale(1.15);opacity:1}100%{transform:translate(-50%,0) scale(.7);opacity:.6}}
 .pup{width:36px;height:25px;animation:hop .34s ease-in-out infinite alternate}
 .pup:nth-child(2){animation-delay:.17s}
 .pup .lg{transform-box:fill-box;transform-origin:50% 0;animation:leg .34s ease-in-out infinite alternate}
@@ -163,7 +171,7 @@ function addMonths(d,n){ const [y,m,dd]=d.split('-').map(Number); const t=new Da
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),3000); }
 function fail(e){ console.error(e); toast('⚠️ '+(e?.message||String(e))); }
 const num = v => parseFloat(String(v??'').replace(/[^0-9.\-]/g,''))||0;
-function openSheet(html){ $('#sheetBody').innerHTML=html; $('#sheet').classList.add('show'); }
+function openSheet(html){ $('#sheetBody').innerHTML=html; $('#sheet').classList.add('show'); const b=$('#sbox'); if(b){ b.scrollTop=0; b.style.transform=''; } }
 function closeSheet(){ $('#sheet').classList.remove('show'); $('#sbox').style.transform=''; }
 // deslizar hacia abajo para cerrar
 (function(){ let y0=null, dy=0; const box=()=>$('#sbox');
@@ -264,7 +272,7 @@ function gst(g, over){
   let avance,falta,n=0,cuota=0,pend=0,pct=0,st='',stc='hint';
   const cyc=g.cycle_from||g.created_at||'';
   const pagCiclo=-sum(ms.filter(m=>m.kind==='pago'&&(m.created_at||'')>cyc).map(m=>m.amount));
-  if(g.kind==='fijo'){
+  if(isCyc(g)){
     const porPagar=Math.max(0,target-pagCiclo);
     avance=saldo+pagCiclo; falta=Math.max(0,porPagar-saldo);
     n=due?countQ(q,due):Math.max(1,2*freqOf(g));
@@ -522,12 +530,13 @@ function movRow(m){
 
 
 // ---------- perritos corriendo ----------
-function pupLia(run){ // schnauzer gris niña
+function pupLia(run){ // Lia: schnauzer gris niña, pechera rosa
   const f='#9097a3', st='#59606d';
   return `<svg class="pup ${run?'':'sit'}" viewBox="0 0 48 32"><path d="M10 14 Q5 9 7 3" stroke="${st}" stroke-width="3" fill="none" stroke-linecap="round"/>
     <rect class="lg" x="11" y="19" width="3.6" height="10" rx="1.8" fill="${f}"/><rect class="lg b" x="15.6" y="19" width="3.6" height="10" rx="1.8" fill="${f}"/>
     <rect class="lg b" x="25" y="19" width="3.6" height="10" rx="1.8" fill="${f}"/><rect class="lg" x="29.6" y="19" width="3.6" height="10" rx="1.8" fill="${f}"/>
     <rect x="8" y="11" width="27" height="11.5" rx="5.7" fill="${f}"/><path d="M12 22 q3 4 6 0 q3 4 6 0 q3 4 6 0" fill="#e5e7eb"/>
+    <path d="M24 11 h7 v11.5 h-7 z" fill="#ec4899"/><path d="M24 15.5 h7" stroke="#be185d" stroke-width="1"/><circle cx="27.5" cy="11.6" r="1.1" fill="#fde047"/>
     <rect x="29" y="3.5" width="12.5" height="12.5" rx="4" fill="${f}"/>
     <path d="M30 6 Q31 1 36.5 3 Q33 5 32 10.5 Z" fill="${st}"/>
     <path d="M36 9.5 h8 a2.2 2.2 0 0 1 0 4.4 h-1 q-1 6.5 -7.5 5 z" fill="#f4f5f7"/>
@@ -535,28 +544,47 @@ function pupLia(run){ // schnauzer gris niña
     <circle cx="37" cy="8.6" r="1.2" fill="#1f2430"/><path d="M36 7.6 l-1.2 -1" stroke="#1f2430" stroke-width=".7"/><circle cx="45" cy="11.3" r="1.6" fill="#1f2430"/>
     <path d="M31.5 3.2 c-1 -2.6 -4 -2.4 -3.6 0 c-.4 2.4 2.6 2.6 3.6 0z M31.5 3.2 c1 -2.6 4 -2.4 3.6 0 c.4 2.4 -2.6 2.6 -3.6 0z" fill="#ec4899"/><circle cx="31.5" cy="3.2" r="1.1" fill="#be185d"/></svg>`;
 }
-function pupTed(run){ // poodle blanco niño
-  const f='#ffffff', st='#cfc8bb';
-  const leg=(x,c)=>`<g class="lg ${c}"><rect x="${x}" y="19" width="3" height="9" rx="1.5" fill="${f}" stroke="${st}" stroke-width=".7"/><circle cx="${x+1.5}" cy="28.6" r="2.4" fill="${f}" stroke="${st}" stroke-width=".7"/></g>`;
-  return `<svg class="pup ${run?'':'sit'}" viewBox="0 0 48 32"><path d="M10 15 Q7 11 7.5 7" stroke="${st}" stroke-width="1.6" fill="none"/><circle cx="7" cy="5.5" r="3.6" fill="${f}" stroke="${st}" stroke-width=".8"/>
-    ${leg(11,'')}${leg(15.5,'b')}${leg(25,'b')}${leg(29.5,'')}
-    <ellipse cx="21" cy="16.5" rx="13" ry="6.8" fill="${f}" stroke="${st}" stroke-width=".9"/>
-    <circle cx="23" cy="11.5" r="3" fill="${f}" stroke="${st}" stroke-width=".7"/><circle cx="28" cy="11" r="3" fill="${f}" stroke="${st}" stroke-width=".7"/>
-    <circle cx="36.5" cy="10.5" r="6.4" fill="${f}" stroke="${st}" stroke-width=".9"/>
-    <circle cx="34" cy="4.2" r="3.2" fill="${f}" stroke="${st}" stroke-width=".7"/><circle cx="38.5" cy="3.4" r="3.1" fill="${f}" stroke="${st}" stroke-width=".7"/><circle cx="36.3" cy="2.6" r="2.6" fill="${f}" stroke="${st}" stroke-width=".7"/>
-    <ellipse cx="33" cy="13.5" rx="3" ry="5" fill="${f}" stroke="${st}" stroke-width=".8"/>
-    <ellipse cx="43" cy="12.4" rx="3.8" ry="2.7" fill="#faf7f2" stroke="${st}" stroke-width=".7"/>
-    <circle cx="38.2" cy="9.3" r="1.15" fill="#1f2430"/><circle cx="46" cy="11.9" r="1.4" fill="#1f2430"/>
-    <path d="M33 18 l-3 -1.8 v3.6z M33 18 l3 -1.8 v3.6z" fill="#3b82f6"/><circle cx="33" cy="18" r="1" fill="#1d4ed8"/></svg>`;
+function pupTed(run){ // Ted: blanco crema esponjado, orejas beige, pechera roja
+  const f='#fbf6ec', sh='#e6d8bf', ear='#e3b97f';
+  const fl=(x,y,r)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${f}"/>`;
+  const leg=(x,c)=>`<g class="lg ${c}"><rect x="${x}" y="18" width="3.6" height="10" rx="1.8" fill="${f}" stroke="${sh}" stroke-width=".6"/><circle cx="${x+1.8}" cy="28.4" r="2.3" fill="${f}" stroke="${sh}" stroke-width=".6"/></g>`;
+  return `<svg class="pup ${run?'':'sit'}" viewBox="0 0 48 32">
+    <g class="tail"><circle cx="8" cy="7" r="3.6" fill="${f}" stroke="${sh}" stroke-width=".6"/><circle cx="5.5" cy="4.5" r="2.8" fill="${f}" stroke="${sh}" stroke-width=".6"/><circle cx="9.5" cy="3.5" r="2.4" fill="${f}" stroke="${sh}" stroke-width=".6"/></g>
+    ${leg(11,'')}${leg(15.6,'b')}${leg(25,'b')}${leg(29.6,'')}
+    <ellipse cx="21" cy="16" rx="13.5" ry="7.4" fill="${f}" stroke="${sh}" stroke-width=".8"/>
+    ${fl(12,12,4)}${fl(18,10.5,4)}${fl(25,10.5,4)}${fl(13,20,3.4)}${fl(21,21.5,3.4)}${fl(28,20.5,3.4)}
+    <path d="M24 10 h6.5 v12.5 h-6.5 z" fill="#ef4444"/><path d="M24 15.5 h6.5" stroke="#b91c1c" stroke-width="1"/><circle cx="27.2" cy="10.6" r="1.1" fill="#fde047"/>
+    <circle cx="37" cy="10" r="7" fill="${f}" stroke="${sh}" stroke-width=".8"/>${fl(34,4.5,3.4)}${fl(38.5,3.8,3.2)}${fl(41.5,6,2.8)}
+    <ellipse cx="33.2" cy="11.5" rx="3" ry="4.6" fill="${ear}"/>
+    <ellipse cx="43" cy="12" rx="3.6" ry="2.8" fill="#fffdf8" stroke="${sh}" stroke-width=".6"/>
+    <circle cx="38.6" cy="8.6" r="1.35" fill="#1b1410"/><circle cx="46" cy="11.3" r="1.5" fill="#1b1410"/>
+    <path d="M42 14.2 q1 3.6 2.6 0.6" fill="#fb7185"/></svg>`;
 }
-const pups = (pct,run=true) => `<div class="pups" style="left:max(74px,${pct}%)">${pupTed(run)}${pupLia(run)}</div>`;
+function human(woman, run){ // corren detrás de los perritos
+  const skin='#f1c27d', hair=woman?'#5b3a29':'#2b2118', top=woman?'#a855f7':'#2563eb', pants=woman?'#334155':'#1e293b';
+  return `<svg class="hum ${run?'':'sit'}" viewBox="0 0 26 42">
+    <g class="lg"><rect x="10" y="23" width="3.6" height="14" rx="1.8" fill="${pants}"/><rect x="9.5" y="35.5" width="6" height="3" rx="1.5" fill="#f8fafc" stroke="#94a3b8" stroke-width=".5"/></g>
+    <g class="lg b"><rect x="13" y="23" width="3.6" height="14" rx="1.8" fill="${pants}"/><rect x="12.5" y="35.5" width="6" height="3" rx="1.5" fill="#f8fafc" stroke="#94a3b8" stroke-width=".5"/></g>
+    <g class="arm b"><rect x="10.5" y="12" width="3" height="10" rx="1.5" fill="${skin}"/></g>
+    <rect x="9" y="11" width="9" height="13.5" rx="4" fill="${top}"/>
+    <g class="arm"><rect x="13" y="12" width="3" height="10" rx="1.5" fill="${skin}"/></g>
+    <circle cx="14.5" cy="6" r="4.6" fill="${skin}"/>
+    ${woman?`<path d="M10 6 Q10 0.6 15 1.2 Q19.5 1.6 19 5 Q15 3.4 12 5.6 Z" fill="${hair}"/><path class="pony" d="M10.4 4 Q4 4 3.6 9 Q7 7.6 10.6 7.4 Z" fill="${hair}"/><circle cx="10.6" cy="4.8" r="1.1" fill="#ec4899"/>`
+           :`<path d="M10 5.6 Q10 0.8 15 1 Q19.6 1.4 19 4.6 Q15 3.2 11.4 6.8 Z" fill="${hair}"/>`}
+    <circle cx="17" cy="6" r=".8" fill="#1f2430"/><path d="M16.6 8.4 q1 .8 2 0" stroke="#7c2d12" stroke-width=".6" fill="none"/></svg>`;
+}
+function pups(pct, run=true){
+  const done=!run, showH=pct>=60||done, gap=done?0:Math.round(Math.max(0,100-pct)/40*44);
+  const min=showH?40+64+gap+84:84;
+  return `<div class="pups${done?' done':''}" style="left:max(${min}px,${pct}%)">${showH?human(true,!done)+human(false,!done)+`<i style="width:${gap}px;flex:none"></i>`:''}${pupTed(run)}${pupLia(run)}${done&&showH?'<span class="heart">💖</span>':''}</div>`;
+}
 
 // ---------- INICIO ----------
 function goalRow(g, opts={}){
   const s=gst(g), [bg,fg]=KCOL[g.kind];
   const barCol=s.stc==='red'?'var(--rd)':s.stc==='done'?'var(--pr)':s.stc==='green'?'var(--ok)':fg;
-  const right=g.kind==='fijo'?`${money(s.avance)}<span class="mu"> / ${money(g.target)}</span>`:`${money(s.avance)}${+g.target?`<span class="mu"> / ${money(g.target)}</span>`:''}`;
-  const sub=g.kind==='fijo'?((s.pagCiclo>0.5&&s.pagCiclo<(+g.target||0)-0.5?`Pagado ${money(s.pagCiclo)} · `:'')+(s.due?`Paga ${fmtD(s.due)}`:'Sin fecha de pago')):(s.due?`Meta ${fmtD(s.due)}`:(+g.cuota?`${money(g.cuota)} por quincena`:''));
+  const right=isCyc(g)?`${money(s.avance)}<span class="mu"> / ${money(g.target)}</span>`:`${money(s.avance)}${+g.target?`<span class="mu"> / ${money(g.target)}</span>`:''}`;
+  const sub=isCyc(g)?((s.pagCiclo>0.5&&s.pagCiclo<(+g.target||0)-0.5?`Pagado ${money(s.pagCiclo)} · `:'')+(s.due?(g.subtype==='tdc'?`Límite ${fmtD(s.due)}`:`Paga ${fmtD(s.due)}`):'Sin fecha de pago')+(g.subtype==='tdc'&&+ex(g).total?` · debes ${money(ex(g).total)}`:'')):(s.due?`Meta ${fmtD(s.due)}`:(+g.cuota?`${money(g.cuota)} por quincena`:''));
   return `<div class="item" ${opts.click?`onclick="sheetGoal('${g.id}')" style="cursor:pointer"`:''}>
     <div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div>
     <div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><span class="b" style="white-space:nowrap">${right}</span></div>
@@ -566,7 +594,7 @@ function goalRow(g, opts={}){
 }
 function vInicio(){
   const q=currentQ(), nq=shiftQ(q,1), l=libre(), dl=daysLeft(), gs=activeGoals();
-  const fijos=gs.filter(g=>g.kind==='fijo').sort((a,b)=>(a.due_date||'9')<(b.due_date||'9')?-1:1), metas=gs.filter(g=>g.kind!=='fijo');
+  const fijos=gs.filter(isCyc).sort((a,b)=>(a.due_date||'9')<(b.due_date||'9')?-1:1), metas=gs.filter(g=>!isCyc(g));
   const alerts=gs.map(g=>[g,gst(g)]).filter(([g,s])=>s.stc==='red');
   const banks=S.accounts.map(a=>({a,v:accSaved(a.name)})).filter(x=>Math.abs(x.v)>0.5||+x.a.tope);
   const last=S.movs.filter(movMine).slice(0,6);
@@ -645,14 +673,15 @@ function historyOf(g){
 function sheetMove(id,kind){
   const g=goalById(id), s=gst(g);
   const title={aparta:'＋ Meter dinero',retira:'↩ Sacar dinero',pago:'💳 Registrar pago'}[kind];
-  const porPagar=g.kind==='fijo'?Math.max(0,(+g.target||0)-s.pagCiclo):0;
-  const def=kind==='pago'?(g.kind==='fijo'?Math.min(Math.max(0,s.saldo),porPagar||s.saldo):Math.max(0,s.saldo)):0;
+  const porPagar=isCyc(g)?Math.max(0,(+g.target||0)-s.pagCiclo):0;
+  const def=kind==='pago'?(isCyc(g)?Math.min(Math.max(0,s.saldo),porPagar||s.saldo):Math.max(0,s.saldo)):0;
   openSheet(`<h1>${esc(g.icon||'')} ${esc(g.name)}</h1><div class="mu" style="margin-top:-6px">${title} · saldo ${money(s.saldo)}</div>
   <input id="mv_amt" class="amt" style="margin-top:14px" type="number" inputmode="decimal" value="${def>0?Math.round(def):''}" placeholder="${kind==='aparta'&&s.pend>0.5?Math.round(s.pend):'$0'}">
   ${kind==='aparta'?`<p class="mu">Sale de tu dinero sin repartir (${money(libre())}).${s.pend>0.5?' Vacío = sugerido '+money(s.pend)+'.':''}</p>`:''}
   ${kind==='retira'?`<p class="mu">El dinero que saques regresa a tu <b>saldo libre</b>.</p>`:''}
   ${kind==='pago'?`<p class="mu">Se descuenta de este apartado, no de tu saldo libre. Puedes pagar en partes.</p>
-    ${g.kind==='fijo'?`<div class="card" style="background:var(--bg);box-shadow:none;padding:12px"><div class="row sm"><span>Este periodo</span><b>Pagado ${money(s.pagCiclo)} de ${money(g.target)}</b></div>
+    ${g.subtype==='tdc'?`<div class="row sm" style="margin-bottom:8px"><span>Al corte <b>${money(ex(g).corte)}</b></span><span>Mínimo <b>${money(ex(g).minimo)}</b></span><span>Debes <b>${money(ex(g).total)}</b></span></div>`:''}
+    ${isCyc(g)?`<div class="card" style="background:var(--bg);box-shadow:none;padding:12px"><div class="row sm"><span>Este periodo</span><b>Pagado ${money(s.pagCiclo)} de ${money(g.target)}</b></div>
       <label style="display:flex;gap:10px;align-items:center;margin:10px 0 0;color:var(--tx)"><input id="mv_done" type="checkbox" style="width:22px;height:22px" ${def>=porPagar-0.5?'checked':''}>
       <span>Ya quedó liquidado${g.due_date?`: pasar al siguiente pago (<b>${fmtD(addPeriod(g.due_date,freqOf(g)))}</b>)`:''}</span></label></div>`:''}`:''}
   <div class="grid2"><div><label>Nota</label><input id="mv_note" placeholder="Opcional"></div><div><label>Fecha</label><input id="mv_date" type="date" value="${todayISO()}"></div></div>
@@ -662,39 +691,79 @@ function saveMove(id,kind){
   const g=goalById(id), v=num($('#mv_amt').value)||(kind==='aparta'?Math.round(gst(g).pend):0); if(v<=0) return toast('Escribe un monto');
   if(kind==='aparta'){ if(!doApartar(g,v)) return; }
   else { const ops=[{table:'movements',action:'insert',row:apartarOps(g,v,kind,$('#mv_note').value.trim(),$('#mv_date').value)}];
-    if(kind==='pago'&&g.kind==='fijo'&&($('#mv_done')?.checked || gst(g).pagCiclo+v>=(+g.target||0)-0.5)){
+    if(kind==='pago'&&g.subtype==='tdc'&&+ex(g).total) ops.push({table:'goals',action:'update',row:{extra:{...ex(g),total:Math.max(0,+ex(g).total-v)}},match:{id}});
+    if(kind==='pago'&&isCyc(g)&&($('#mv_done')?.checked || gst(g).pagCiclo+v>=(+g.target||0)-0.5)){
       const row={cycle_from:new Date(Date.now()+120000).toISOString()}; if(g.due_date) row.due_date=addPeriod(g.due_date,freqOf(g));
       ops.push({table:'goals',action:'update',row,match:{id}}); }
     db(ops); }
-  closeSheet(); toast(kind==='pago'?`💳 Pago de ${money(v)} registrado${g.kind==='fijo'&&!$('#mv_done')?.checked&&gst(g).falta>0.5?' · pago parcial':''}`:kind==='retira'?`↩ ${money(v)} regresaron a tu saldo libre`:`✅ ${money(v)} a ${g.name}`);
+  closeSheet(); toast(kind==='pago'?`💳 Pago de ${money(v)} registrado${isCyc(g)&&!$('#mv_done')?.checked&&gst(g).falta>0.5?' · pago parcial':''}${g.subtype==='tdc'&&$('#mv_done')?.checked?' · cuando llegue tu nuevo estado de cuenta, actualiza el saldo al corte':''}`:kind==='retira'?`↩ ${money(v)} regresaron a tu saldo libre`:`✅ ${money(v)} a ${g.name}`);
 }
+const isCyc = g => g.kind==='fijo' || (g.kind==='pago' && g.subtype==='tdc');   // se paga por periodos
+const SUBS = {tdc:'💳 Tarjeta de crédito', prestamo:'🏦 Préstamo', otro:'📄 Otra'};
+const ex = g => g.extra||{};
 function sheetEdit(id){
-  const g=id==='new'?{kind:'fijo',account:(S.accounts[0]||{}).name||'Banorte',owner:defOwner(),icon:'🎯',freq_months:1}:goalById(id);
-  window._ic=g.icon||'🎯';
+  const g=id==='new'?{kind:'fijo',account:(S.accounts[0]||{}).name||'Banorte',owner:defOwner(),icon:'🎯',freq_months:1,subtype:'tdc',extra:{}}:goalById(id);
+  const e=ex(g);
+  window._ic=g.icon||'🎯'; window._sub=g.subtype||(g.kind==='pago'?'otro':'tdc'); window._plan=e.plan||'corte';
   openSheet(`<h1>${id==='new'?'Nuevo apartado':'Editar'}</h1>
   <label>Tipo</label><div class="grid3" id="e_kind">${Object.keys(KINDS).map(k=>`<button class="mini ${g.kind===k?'':'sec'}" data-k="${k}" onclick="setKind('${k}')">${{fijo:'📆 Fijo',pago:'🤝 Deuda',meta:'🎯 Meta'}[k]}</button>`).join('')}</div>
   <input type="hidden" id="e_k" value="${g.kind}">
-  <p class="mu sm" id="e_help" style="margin:8px 0 0">${kindHelp(g.kind)}</p>
-  <label>Ícono</label><div class="chips" id="e_ics" style="flex-wrap:wrap">${EMOJIS.map(e=>`<button class="chip ${e===window._ic?'on':''}" style="padding:6px 9px;font-size:20px" onclick="window._ic='${e}';pickOn('e_ics',this)">${e}</button>`).join('')}</div>
+  <div id="e_subw"><label>¿Qué tipo de deuda?</label><div class="grid3" id="e_sub">${Object.entries(SUBS).map(([k,t])=>`<button class="mini" data-s="${k}" onclick="setSub('${k}')">${t}</button>`).join('')}</div></div>
+  <p class="mu sm" id="e_help" style="margin:8px 0 0"></p>
+  <label>Ícono</label><div class="chips" id="e_ics" style="flex-wrap:wrap">${EMOJIS.map(x=>`<button class="chip ${x===window._ic?'on':''}" style="padding:6px 9px;font-size:20px" onclick="window._ic='${x}';pickOn('e_ics',this)">${x}</button>`).join('')}</div>
   <label>Nombre</label><input id="e_name" value="${esc(g.name)}" placeholder="Ej. Internet">
-  <div class="grid2"><div><label id="e_tl">${g.kind==='fijo'?'Monto a pagar':'Meta total'}</label><input id="e_target" type="number" inputmode="decimal" value="${g.target??''}"></div>
-  <div><label id="e_dl">${g.kind==='fijo'?'Próximo pago':'Fecha meta'}</label><input id="e_due" type="date" value="${g.due_date??''}"></div></div>
-  <div class="grid2"><div id="e_freqw" style="${g.kind==='fijo'?'':'display:none'}"><label>Cada cuánto</label><select id="e_freq">${[[0,'Cada quincena'],[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada 3 meses'],[6,'Cada 6 meses'],[12,'Cada año']].map(([n,t])=>`<option value="${n}" ${freqOf(g)===n?'selected':''}>${t}</option>`).join('')}</select></div>
-  <div id="e_cuw" style="${g.kind==='fijo'?'display:none':''}"><label>Cuota fija (opcional)</label><input id="e_cuota" type="number" inputmode="decimal" value="${g.cuota??''}" placeholder="Si no hay fecha"></div>
+  <div id="e_tdc" class="card" style="background:var(--bg);box-shadow:none;padding:12px;margin:12px 0 0">
+    <div class="grid2"><div><label style="margin-top:0">Deuda total</label><input id="e_total" type="number" inputmode="decimal" value="${e.total??''}" placeholder="Todo lo que debes"></div>
+    <div><label style="margin-top:0">Saldo al corte</label><input id="e_corte" type="number" inputmode="decimal" value="${e.corte??''}" placeholder="Para no pagar intereses"></div></div>
+    <div class="grid2"><div><label>Pago mínimo</label><input id="e_min" type="number" inputmode="decimal" value="${e.minimo??''}"></div>
+    <div><label>Fecha de corte</label><input id="e_fcorte" type="date" value="${e.fcorte??''}"></div></div>
+    <label>¿Cuánto vas a pagar este mes?</label><div class="grid3" id="e_plan">${[['corte','Saldo al corte'],['minimo','Mínimo'],['otro','Otra cantidad']].map(([k,t])=>`<button class="mini" data-p="${k}" onclick="setPlan('${k}')">${t}</button>`).join('')}</div>
+    <div id="e_otrow"><label>Otra cantidad</label><input id="e_otro" type="number" inputmode="decimal" value="${e.otro??''}"></div>
+    <p class="mu sm" style="margin-bottom:0">Pagar el saldo al corte evita intereses. Cada mes, cuando llegue tu estado de cuenta, actualiza el saldo al corte y el mínimo.</p></div>
+  <div class="grid2"><div id="e_tw"><label id="e_tl">Monto</label><input id="e_target" type="number" inputmode="decimal" value="${g.target??''}"></div>
+  <div><label id="e_dl">Fecha</label><input id="e_due" type="date" value="${g.due_date??''}"></div></div>
+  <div class="grid2"><div id="e_freqw"><label>Cada cuánto</label><select id="e_freq">${[[0,'Cada quincena'],[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada 3 meses'],[6,'Cada 6 meses'],[12,'Cada año']].map(([n,t])=>`<option value="${n}" ${freqOf(g)===n?'selected':''}>${t}</option>`).join('')}</select></div>
+  <div id="e_cuw"><label id="e_cul">Cuota fija (opcional)</label><input id="e_cuota" type="number" inputmode="decimal" value="${g.cuota??''}" placeholder="Si no hay fecha"></div>
   <div><label>Banco</label><select id="e_acc">${S.accounts.map(a=>`<option ${g.account===a.name?'selected':''}>${esc(a.name)}</option>`).join('')}</select></div></div>
   <label>De quién</label><select id="e_owner">${people().map(p=>`<option ${g.owner===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
   <button class="full" style="margin-top:16px" onclick="saveGoal('${id}')">Guardar</button>
   ${id!=='new'?`<div class="grid2" style="margin-top:10px"><button class="sec" onclick="archiveGoal('${id}')">🗄 Archivar</button><button class="dg" onclick="delGoal('${id}')">🗑 Borrar</button></div>${historyOf(g)}`:''}`);
+  setKind(g.kind, true); setPlan(window._plan);
 }
-const kindHelp = k => ({fijo:'Algo que pagas cada cierto tiempo: renta, internet, luz, tarjeta de crédito al corte. Pon cuánto y cuándo pagas; puedes pagarlo en partes.',pago:'Algo que debes: préstamo, mecánico. Pon cuánto debes y para cuándo.',meta:'Algo para lo que ahorras: Navidad, fondo médico. Pon cuánto quieres juntar y para cuándo.'})[k];
-function setKind(k){ $('#e_k').value=k; document.querySelectorAll('#e_kind button').forEach(b=>b.classList.toggle('sec',b.dataset.k!==k));
-  $('#e_help').textContent=kindHelp(k); $('#e_tl').textContent=k==='fijo'?'Monto a pagar':k==='pago'?'Cuánto debes':'Meta total'; $('#e_dl').textContent=k==='fijo'?'Próximo pago':'Fecha meta';
-  $('#e_freqw').style.display=k==='fijo'?'':'none'; $('#e_cuw').style.display=k==='fijo'?'none':''; }
+const HELP = {fijo:'Algo que pagas cada cierto tiempo: renta, internet, luz, Uber. Pon cuánto y cuándo pagas; puedes pagarlo en partes.',
+  meta:'Algo para lo que ahorras: Navidad, fondo médico. Pon cuánto quieres juntar y para cuándo.',
+  tdc:'Tarjeta de crédito: pon tu deuda total, el saldo al corte, el pago mínimo y la fecha límite. La app te dice cuánto apartar para pagar a tiempo.',
+  prestamo:'Préstamo: pon cuánto debes, cuánto pagas cada vez y para cuándo lo quieres liquidar.',
+  otro:'Otra deuda: mecánico, un amigo… pon cuánto debes y para cuándo.'};
+function setKind(k, keepSub){
+  $('#e_k').value=k; document.querySelectorAll('#e_kind button').forEach(b=>b.classList.toggle('sec',b.dataset.k!==k));
+  $('#e_subw').style.display=k==='pago'?'':'none';
+  if(k==='pago') setSub(window._sub==='tdc'||window._sub==='prestamo'||window._sub==='otro'?window._sub:'otro');
+  else { $('#e_tdc').style.display='none'; $('#e_tw').style.display=''; $('#e_help').textContent=HELP[k];
+    $('#e_tl').textContent=k==='fijo'?'Monto a pagar':'Meta total'; $('#e_dl').textContent=k==='fijo'?'Próximo pago':'Fecha meta';
+    $('#e_freqw').style.display=k==='fijo'?'':'none'; $('#e_cuw').style.display=k==='fijo'?'none':''; $('#e_cul').textContent='Cuota fija (opcional)'; }
+}
+function setSub(sb){
+  window._sub=sb; document.querySelectorAll('#e_sub button').forEach(b=>b.classList.toggle('sec',b.dataset.s!==sb));
+  $('#e_help').textContent=HELP[sb]; const tdc=sb==='tdc';
+  $('#e_tdc').style.display=tdc?'':'none'; $('#e_tw').style.display=tdc?'none':''; $('#e_freqw').style.display='none';
+  $('#e_cuw').style.display=tdc?'none':''; $('#e_dl').textContent=tdc?'Fecha límite de pago':sb==='prestamo'?'Liquidarlo para':'Para cuándo';
+  $('#e_tl').textContent='Cuánto debes'; $('#e_cul').textContent=sb==='prestamo'?'Pago por quincena (opcional)':'Cuota fija (opcional)';
+  if(tdc&&window._ic==='🎯'){ window._ic='💳'; }
+}
+function setPlan(p){ window._plan=p; document.querySelectorAll('#e_plan button').forEach(b=>b.classList.toggle('sec',b.dataset.p!==p)); $('#e_otrow').style.display=p==='otro'?'':'none'; }
 function saveGoal(id){
-  const row={kind:$('#e_k').value,icon:window._ic,name:$('#e_name').value.trim(),target:num($('#e_target').value)||null,
+  const kind=$('#e_k').value, sub=kind==='pago'?window._sub:null;
+  const row={kind,subtype:sub,icon:window._ic,name:$('#e_name').value.trim(),target:num($('#e_target').value)||null,
     due_date:$('#e_due').value||null,freq_months:$('#e_freq').value===''?1:+$('#e_freq').value,cuota:num($('#e_cuota').value)||null,account:$('#e_acc').value,owner:$('#e_owner').value};
   if(!row.name) return toast('Ponle nombre');
-  if(row.kind==='fijo'&&!row.target) return toast('Pon el monto a pagar');
+  if(sub==='tdc'){
+    const x={total:num($('#e_total').value)||null,corte:num($('#e_corte').value)||null,minimo:num($('#e_min').value)||null,fcorte:$('#e_fcorte').value||null,plan:window._plan,otro:num($('#e_otro').value)||null};
+    row.extra=x; row.freq_months=1; row.cuota=null;
+    row.target = x.plan==='minimo'?x.minimo : x.plan==='otro'?x.otro : (x.corte||x.total);
+    if(!row.target) return toast(x.plan==='minimo'?'Pon el pago mínimo':x.plan==='otro'?'Pon la cantidad a pagar':'Pon el saldo al corte');
+  }
+  if(kind==='fijo'&&!row.target) return toast('Pon el monto a pagar');
   if(id==='new'){ row.sort=S.goals.length; db({table:'goals',action:'insert',row}); } else db({table:'goals',action:'update',row,match:{id}});
   closeSheet(); toast('✅ Guardado');
 }
@@ -727,7 +796,7 @@ function vAnalisis(){
   const trn=sum(S.movs.filter(m=>(m.kind==='trans_in'||(m.kind==='trans_out'&&!m.goal_id))&&movMine(m)&&inRange(m,R.a,R.b)).map(m=>m.amount));
   const gLibre=-sum(S.movs.filter(m=>m.kind==='gasto'&&!m.goal_id&&movMine(m)&&inRange(m,R.a,R.b)).map(m=>m.amount));
   // compromiso: lo que piden los apartados vs ingreso promedio de las últimas 4 quincenas
-  const cuotas=sum(activeGoals().map(g=>{ const s=gst(g); return g.kind==='fijo'?perQ(g):(s.falta>0.5?s.cuota:0); }));
+  const cuotas=sum(activeGoals().map(g=>{ const s=gst(g); return isCyc(g)?perQ(g):(s.falta>0.5?s.cuota:0); }));
   let qs=[],q=currentQ(); for(let i=0;i<4;i++){ q=shiftQ(q,-1); qs.push(q); }
   const qsWith=qs.filter(x=>ingresadoQ(x)>0); const prom=qsWith.length?sum(qsWith.map(ingresadoQ))/qsWith.length:ingresadoQ(currentQ());
   const sg=goalById(S.sim.id)||activeGoals().find(g=>g.kind!=='fijo')||activeGoals()[0];
@@ -764,7 +833,7 @@ function vSim(g){
   return `<div class="card"><h2>🧪 Simulador · ¿qué pasa si…?</h2>
     <label>Apartado</label><select onchange="S.sim={id:this.value};render()">${activeGoals().map(x=>`<option value="${x.id}" ${x.id===g.id?'selected':''}>${esc(x.icon||'')} ${esc(x.name)}</option>`).join('')}</select>
     <div class="grid2"><div><label>Meter extra hoy</label><input type="number" inputmode="decimal" value="${S.sim.extra||''}" placeholder="$0" onchange="S.sim.id='${g.id}';S.sim.extra=num(this.value);render()"></div>
-    <div><label>${g.kind==='fijo'?'Próximo pago':'Nueva fecha'}</label><input type="date" value="${o.due||''}" onchange="S.sim.id='${g.id}';S.sim.due=this.value;render()"></div></div>
+    <div><label>${isCyc(g)?'Próximo pago':'Nueva fecha'}</label><input type="date" value="${o.due||''}" onchange="S.sim.id='${g.id}';S.sim.due=this.value;render()"></div></div>
     <div class="grid2" style="margin-top:14px;text-align:center">
       <div style="background:var(--bg);border-radius:14px;padding:10px"><div class="mu">Hoy</div><div class="b">${money(s.cuota)}/quincena</div><div class="mu sm">libre ${money(l/dl)}/día</div></div>
       <div style="background:var(--prl);border-radius:14px;padding:10px"><div class="mu">Con el cambio</div><div class="b" style="color:var(--pr)">${money(n.cuota)}/quincena</div><div class="mu sm">libre ${money(l2/dl)}/día</div></div></div>
