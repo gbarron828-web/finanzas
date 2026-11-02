@@ -115,6 +115,21 @@ nav .fab{flex:none;width:60px;height:60px;border-radius:50%;background:linear-gr
 .tri span{background:var(--bg);border-radius:10px;padding:5px 7px;line-height:1.3}
 .tri b{display:block;color:var(--tx);font-size:13px}
 a{color:var(--pr);font-weight:600;text-decoration:none}
+.ins{border-radius:14px;padding:11px 13px;margin-bottom:8px;font-size:14px;line-height:1.45}
+.ins b{font-weight:700}
+.days{position:relative;display:flex;align-items:flex-end;gap:3px;margin-top:12px;padding-bottom:22px;border-bottom:1px solid var(--ln)}
+.days .cap{position:absolute;left:0;right:0;border-top:1.5px dashed #94a3b8;pointer-events:none;font-style:normal}
+.days .cap{z-index:2}
+.days .cap em{position:absolute;left:0;top:-16px;font-size:10px;font-style:normal;color:var(--mu);background:#fff;padding:0 4px;border-radius:6px}
+.dcol{flex:1;min-width:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;border-radius:6px;height:100%;color:var(--mu)}
+.dcol i{display:block;width:100%;max-width:26px;border-radius:5px 5px 2px 2px}
+.dcol small{font-size:8px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;max-width:100%}
+.dcol span{position:absolute;bottom:-19px;font-size:10px}
+.dcol{position:relative}
+.dcol.on i{outline:2px solid var(--pr);outline-offset:1px}
+.dcol.on span{color:var(--pr);font-weight:800}
+.tri span{font-size:11px}
+.tri b.neg{color:var(--rd)}.tri b.pos{color:var(--ok)}.tri b.warn{color:#b45309}
 .st.hint{background:#f1f5f9;color:#475569}
 .big{display:flex;gap:14px;align-items:center;text-align:left;padding:16px 18px;border-radius:18px;font-size:16px;width:100%}
 .big span{font-size:30px}.big small{display:block;font-weight:500;opacity:.85;font-size:13px;margin-top:2px}
@@ -147,7 +162,7 @@ function loadScript(src,ms){ return withTimeout(new Promise((res,rej)=>{ const s
 async function loadSB(){
   for(const u of SB_SRCS){ try{ if(!window.supabase) await loadScript(u,9000); if(window.supabase&&window.supabase.createClient) return window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){} }
   return null; }
-const S = {user:null, hh:null, me:'', members:[], accounts:[], goals:[], movs:[], pantry:[], who:'Todos', bank:'Todos', tab:'inicio', period:'q', origin:'todo', showDet:false, sim:{}};
+const S = {user:null, hh:null, me:'', members:[], accounts:[], goals:[], movs:[], pantry:[], who:'Todos', bank:'Todos', tab:'inicio', period:'q', origin:'todo', showDet:false, showIn:false, openDay:false, selDay:null, sim:{}};
 const KINDS = {fijo:'Gasto fijo', pago:'Deuda / pago', meta:'Meta de ahorro'};
 const CAT_IC = {Gasolina:'⛽',Comida:'🍔',Salidas:'🎉','Súper':'🛒',Casa:'🏠',Hogar:'🛋️',Salud:'🩺',Farmacia:'💊',Ropa:'👕',Otro:'📦',Transporte:'🚌',Uber:'🚗',Café:'☕',Regalos:'🎁',Mascotas:'🐾',Perritos:'🐶',Escuela:'📚',Antojos:'🍦',Cine:'🎬',Bebidas:'🍺',Restaurante:'🍽️',Estética:'💇',Lavandería:'🧺',Estacionamiento:'🅿️',Gym:'🏋️',Recargas:'📲',Streaming:'📺',Viajes:'✈️',Taxi:'🚕',Tacos:'🌮',Pizza:'🍕',Postres:'🧁',Juegos:'🎮',Libros:'📖',Música:'🎵',Bebé:'🍼',Plantas:'🪴',Reparaciones:'🔧',Limpieza:'🧽',Papelería:'✏️',Propinas:'🪙',Donativos:'💝',Suscripciones:'🔁',Belleza:'💅',Deporte:'⚽',Fiesta:'🥳',Snacks:'🍿',Desayuno:'🥐',Comida_rápida:'🍟',Doctor:'👩‍⚕️',Dentista:'🦷',Veterinario:'🐕',Casetas:'🛣️',Autolavado:'🚿',Mantenimiento:'🛠️'};
 const EMOJIS = ['🏠','🌐','📱','💧','💡','🔥','📺','🎓','🎄','🏥','🐷','🤝','🔧','🎨','🚗','✈️','💍','👶','🐶','🐾','🎁','💳','🏦','👴','📚','🏋️','🎮','🛋️','💻','🧾','🎯','💰','🛒','🍔','☕','🎬','💊','🦷','👕','🧺','🅿️','📲','🎵','🌮','🏖️','🎂','💒','🪴','🧸','🛠️'];
@@ -784,53 +799,126 @@ function delGoal(id){ const g=goalById(id), s=gst(g);
   db([{table:'movements',action:'delete',match:{goal_id:id}},{table:'goals',action:'delete',match:{id}}]); closeSheet(); toast('Borrado'); }
 
 // ---------- ANÁLISIS ----------
-function periodRange(p){
-  const t=todayISO(), [y,m]=t.split('-').map(Number);
-  if(p==='q'){ const q=currentQ(), pq=shiftQ(q,-1), e=new Date(toDate(q)-dayMs); return {a:q,b:t,pa:pq,pb:iso(e.getFullYear(),e.getMonth()+1,e.getDate()),lbl:'esta quincena'}; }
-  if(p==='m'){ const pm=m===1?12:m-1, py=m===1?y-1:y; return {a:iso(y,m,1),b:t,pa:iso(py,pm,1),pb:iso(py,pm,new Date(py,pm,0).getDate()),lbl:'este mes'}; }
-  const pm=m===1?12:m-1, py=m===1?y-1:y, p2=pm===1?12:pm-1, y2=pm===1?py-1:py;
-  return {a:iso(py,pm,1),b:iso(py,pm,new Date(py,pm,0).getDate()),pa:iso(y2,p2,1),pb:iso(y2,p2,new Date(y2,p2,0).getDate()),lbl:'el mes pasado'};
+const isoD = d => iso(d.getFullYear(),d.getMonth()+1,d.getDate());
+const addDays = (s,n) => isoD(new Date(toDate(s).getTime()+n*dayMs));
+const DOW = ['dom','lun','mar','mié','jue','vie','sáb'];
+function periodRange(p){ // a..b = lo que ya pasó · end = fin del periodo · pa..pb = periodo anterior
+  const t=todayISO(), [y,m]=t.split('-').map(Number), td=toDate(t);
+  if(p==='w'){ const dw=(td.getDay()+6)%7, a=addDays(t,-dw); return {a,b:t,end:addDays(a,6),pa:addDays(a,-7),pb:addDays(a,-1),lbl:'esta semana',live:true}; }
+  if(p==='q'){ const q=currentQ(), nq=shiftQ(q,1); return {a:q,b:t,end:addDays(nq,-1),pa:shiftQ(q,-1),pb:addDays(q,-1),lbl:'esta quincena',live:true}; }
+  if(p==='m'){ const pm=m===1?12:m-1, py=m===1?y-1:y; return {a:iso(y,m,1),b:t,end:iso(y,m,new Date(y,m,0).getDate()),pa:iso(py,pm,1),pb:iso(py,pm,new Date(py,pm,0).getDate()),lbl:'este mes',live:true}; }
+  const pm=m===1?12:m-1, py=m===1?y-1:y, p2=pm===1?12:pm-1, y2=pm===1?py-1:py, e=iso(py,pm,new Date(py,pm,0).getDate());
+  return {a:iso(py,pm,1),b:e,end:e,pa:iso(y2,p2,1),pb:iso(y2,p2,new Date(y2,p2,0).getDate()),lbl:'el mes pasado',live:false};
 }
 const inRange = (m,a,b) => m.date>=a&&m.date<=b;
 const originOk = m => S.origin==='todo' || (S.origin==='libre'?!m.goal_id:!!m.goal_id);
 function hbars(rows,max){ return rows.map(([lb,v,ic,col])=>`<div class="hbar"><span class="lb">${ic||''} ${esc(lb)}</span><span class="tr"><i style="width:${max?Math.max(2,v/max*100):0}%;background:${col}"></i></span><span class="vl">${money(v)}</span></div>`).join(''); }
 const PAL = ['#4f46e5','#7c3aed','#0ea5e9','#10b981','#f59e0b','#ef4444','#db2777','#64748b'];
 function group(ms,key){ const o={}; for(const m of ms){ const k=key(m); o[k]=(o[k]||0)+Math.abs(+m.amount); } return Object.entries(o).sort((x,y)=>y[1]-x[1]); }
-function vAnalisis(){
-  const R=periodRange(S.period);
-  const gs=S.movs.filter(m=>m.kind==='gasto'&&movMine(m)&&originOk(m)&&inRange(m,R.a,R.b));
+// efecto de un movimiento sobre el dinero libre
+const libreFx = m => (!m.goal_id && m.kind!=='aparta' && m.kind!=='retira') ? +m.amount : (m.goal_id && (m.kind==='aparta'||m.kind==='retira')) ? -m.amount : 0;
+const isOut = m => m.kind==='gasto' || m.kind==='trans_out';      // salidas reales
+function periodData(R){
+  const mine=S.movs.filter(movMine), todos=S.who==='Todos';
+  const P=mine.filter(m=>inRange(m,R.a,R.b));
+  const start=sum(mine.filter(m=>m.date<R.a).map(libreFx));
+  const I=sum(P.filter(m=>m.kind==='ingreso').map(m=>m.amount));
+  const TI=todos?0:sum(P.filter(m=>m.kind==='trans_in').map(m=>m.amount));
+  const A=sum(P.filter(m=>m.goal_id&&(m.kind==='aparta'||m.kind==='retira')).map(m=>m.amount));
+  const G=-sum(P.filter(m=>m.kind==='gasto'&&!m.goal_id).map(m=>m.amount));
+  const TOm=todos?[]:P.filter(m=>m.kind==='trans_out'&&!m.goal_id);
+  const TOby=group(TOm,m=>m.category||'otra persona'), TO=sum(TOby.map(x=>x[1]));
+  const AJ=sum(P.filter(m=>!m.goal_id&&(m.kind==='ajuste'||m.kind==='inicial')).map(m=>m.amount));
+  const libreTras=start+I+TI-A, end=libreTras-G-TO+AJ;
+  const totalDays=daysBetween(R.a,R.end)+1, elapsed=Math.max(1,daysBetween(R.a,R.b)+1);
+  const remain=R.live?Math.max(1,daysBetween(todayISO(),R.end)+1):0;
+  const spentLibre=G+TO, perDay=spentLibre/elapsed, couldDay=libreTras/totalDays, canDay=R.live?end/remain:null;
+  const outs=P.filter(m=>isOut(m)&&originOk(m)&&!(todos&&m.kind==='trans_out'));
+  return {P,start,I,TI,A,G,TOby,TO,AJ,libreTras,end,totalDays,elapsed,remain,perDay,couldDay,canDay,outs,todos};
+}
+function insights(R,D){
+  const L=[], add=(p,c,t,act)=>L.push({p,c,t,act});
+  const fmtEnd=fmtD(addDays(R.end,1));
+  if(R.live){
+    if(D.end<-0.5) add(110,'red',`<b>Ya usaste ${money(-D.end)} más de lo que tenías libre.</b> Saca de algún apartado o ajusta tu saldo.`);
+    else if(D.perDay>0.5){ const lasts=D.end/D.perDay;
+      if(lasts<D.remain-0.5) add(100,'red',`<b>A este ritmo te quedas sin dinero libre el ${fmtD(addDays(todayISO(),Math.max(0,Math.floor(lasts))))}.</b> Llevas ~${money(D.perDay)} por día; para llegar al ${fmtEnd}: máximo ${money(D.canDay)} por día.`);
+      else add(40,'green',`<b>Vas bien:</b> a este ritmo llegas al ${fmtEnd} con ~${money(D.end-D.perDay*D.remain)} libres.`); }
+  }
+  for(const g of activeGoals()){ const s=gst(g); if(s.stc==='red') add(90,'red',`<b>${esc(g.icon||'')} ${esc(g.name)}:</b> ${s.st}.`,`sheetGoal('${g.id}')`); }
+  const gs=D.outs.filter(m=>m.kind==='gasto'), gt=-sum(gs.map(m=>m.amount));
+  const otro=-sum(gs.filter(m=>!m.category||m.category==='Otro').map(m=>m.amount));
+  if(gt>0&&otro>=100&&otro/gt>=.3) add(60,'yellow',`<b>${Math.round(otro/gt*100)}% de tus gastos está en "Otro" (${money(otro)}).</b> Con categoría lo ves mejor.`,`S.showDet=true;render()`);
   const prevG=S.movs.filter(m=>m.kind==='gasto'&&movMine(m)&&originOk(m)&&inRange(m,R.pa,R.pb));
-  const tot=-sum(gs.map(m=>m.amount)), prev=-sum(prevG.map(m=>m.amount)), diff=prev?((tot-prev)/prev*100):null;
-  const cats=group(gs,m=>m.category||'Otro'), accs=group(gs,m=>m.account), srcs=group(gs,m=>m.goal_id?(goalById(m.goal_id)?.name||'Apartado'):'Dinero libre');
-  const ins=S.movs.filter(m=>m.kind==='ingreso'&&movMine(m)&&inRange(m,R.a,R.b)), tin=sum(ins.map(m=>m.amount));
-  const apt=sum(S.movs.filter(m=>m.kind==='aparta'&&movMine(m)&&inRange(m,R.a,R.b)).map(m=>m.amount));
-  const trn=sum(S.movs.filter(m=>(m.kind==='trans_in'||(m.kind==='trans_out'&&!m.goal_id))&&movMine(m)&&inRange(m,R.a,R.b)).map(m=>m.amount));
-  const gLibre=-sum(S.movs.filter(m=>m.kind==='gasto'&&!m.goal_id&&movMine(m)&&inRange(m,R.a,R.b)).map(m=>m.amount));
-  // compromiso: lo que piden los apartados vs ingreso promedio de las últimas 4 quincenas
+  if(prevG.length){ const now=Object.fromEntries(group(gs,m=>m.category||'Otro')), bef=Object.fromEntries(group(prevG,m=>m.category||'Otro'));
+    for(const c of Object.keys(now)){ const b=bef[c]||0, n=now[c]; if(b>0&&n-b>=200&&(n-b)/b>=.3) add(55,'yellow',`<b>${catIc(c)} ${esc(c)} va ${Math.round((n-b)/b*100)}% arriba</b> del periodo pasado (+${money(n-b)}).`); }
+    for(const c of Object.keys(bef)){ const n=now[c]||0, b=bef[c]; if(R.live===false&&b-n>=200&&(b-n)/b>=.3) add(30,'green',`<b>${catIc(c)} ${esc(c)} bajó ${Math.round((b-n)/b*100)}%</b> contra el periodo pasado.`); } }
+  const byDay={}; for(const m of D.outs) byDay[m.date]=(byDay[m.date]||0)-m.amount;
+  const days=Object.entries(byDay); if(days.length>=3){ const avg=sum(days.map(d=>d[1]))/days.length, top=days.sort((x,y)=>y[1]-x[1])[0];
+    if(top[1]>=300&&top[1]>=2.5*avg) add(45,'yellow',`<b>El ${DOW[toDate(top[0]).getDay()]} ${fmtD(top[0])} salieron ${money(top[1])}</b>, ${Math.round(top[1]/avg*10)/10} veces tu promedio.`,`S.openDay=true;S.selDay='${top[0]}';render()`); }
+  const small=gs.filter(m=>-m.amount<100); const ss=-sum(small.map(m=>m.amount));
+  if(small.length>=5&&ss>=300) add(40,'yellow',`<b>${small.length} gastos chicos (menos de $100) suman ${money(ss)}.</b> El famoso gasto hormiga.`);
+  for(const [who,v] of D.TOby) if(v>=1) add(20,'blue',`<b>${R.lbl[0].toUpperCase()+R.lbl.slice(1)} le has pasado ${money(v)} a ${esc(who)}.</b>`);
+  if(D.I>0&&D.A/D.I>=.5) add(25,'green',`<b>Apartaste ${Math.round(D.A/D.I*100)}% de lo que ingresaste.</b> Tus apartados van primero 👏`);
+  return L.sort((x,y)=>y.p-x.p).slice(0,3);
+}
+function vAnalisis(){
+  const R=periodRange(S.period), D=periodData(R);
+  const gs=D.outs, tot=-sum(gs.map(m=>m.amount));
+  const prevOuts=S.movs.filter(m=>isOut(m)&&movMine(m)&&originOk(m)&&inRange(m,R.pa,R.pb)&&!(D.todos&&m.kind==='trans_out'));
+  const prev=-sum(prevOuts.map(m=>m.amount)), diff=prev?((tot-prev)/prev*100):null;
+  const gastos=gs.filter(m=>m.kind==='gasto'), trans=gs.filter(m=>m.kind==='trans_out');
+  const cats=group(gastos,m=>m.category||'Otro'), tr=group(trans,m=>m.category||'otra persona');
+  const rows=[...cats.map(([c,v],i)=>[c,v,catIc(c),PAL[i%PAL.length]]),...tr.map(([n,v])=>['A '+n,v,'🔁','#14b8a6'])].sort((x,y)=>y[1]-x[1]);
+  const accs=group(gs,m=>m.account), srcs=group(gastos,m=>m.goal_id?(goalById(m.goal_id)?.name||'Apartado'):'Dinero libre');
+  const ins=D.P.filter(m=>m.kind==='ingreso');
   const cuotas=sum(activeGoals().map(g=>{ const s=gst(g); return isCyc(g)?perQ(g):(s.falta>0.5?s.cuota:0); }));
   let qs=[],q=currentQ(); for(let i=0;i<4;i++){ q=shiftQ(q,-1); qs.push(q); }
   const qsWith=qs.filter(x=>ingresadoQ(x)>0); const prom=qsWith.length?sum(qsWith.map(ingresadoQ))/qsWith.length:ingresadoQ(currentQ());
   const sg=goalById(S.sim.id)||activeGoals().find(g=>g.kind!=='fijo')||activeGoals()[0];
+  const tone={red:['var(--rdl)','#991b1b'],yellow:['var(--wal)','#92400e'],green:['var(--okl)','#047857'],blue:['#e0f2fe','#075985']};
+  const IN=insights(R,D);
+  const line=(l,v,cls='',strong=false)=>`<div class="row" style="margin-top:6px${strong?';border-top:1px solid var(--ln);padding-top:8px':''}"><span${strong?' class="b"':''}>${l}</span><b class="${cls}">${money(v)}</b></div>`;
+  const canCls=D.canDay===null?'':D.canDay>=D.couldDay-0.5?'pos':D.canDay>=D.couldDay*.7?'warn':'neg';
+  // día a día
+  const dayList=[]; for(let d=R.a;d<=R.b&&dayList.length<62;d=addDays(d,1)) dayList.push(d);
+  const byDay={}; for(const m of gs) byDay[m.date]=(byDay[m.date]||0)-m.amount;
+  const dmax=Math.max(1,D.couldDay,...dayList.map(d=>byDay[d]||0)), H=110;
+  const sel=S.selDay&&inRange({date:S.selDay},R.a,R.b)?S.selDay:null;
+  // detalle por día
+  const groupsDay={}; for(const m of gs){ (groupsDay[m.date]=groupsDay[m.date]||[]).push(m); }
   return `<h1>Análisis 📊</h1>${whoBar()}
-  <div class="chips">${[['q','Esta quincena'],['m','Este mes'],['pm','Mes pasado']].map(([k,t])=>`<button class="chip ${S.period===k?'on':''}" onclick="S.period='${k}';render()">${t}</button>`).join('')}</div>
-  <div class="card"><h2>💸 Gastos · ${R.lbl}</h2>
-    <div class="chips" style="margin-bottom:8px">${[['todo','Todo'],['libre','💸 Dinero libre'],['apartados','🎯 De apartados']].map(([k,t])=>`<button class="chip ${S.origin===k?'on':''}" style="padding:6px 11px;font-size:13px" onclick="S.origin='${k}';render()">${t}</button>`).join('')}</div>
-    <div style="font-size:34px;font-weight:800">${money(tot)}</div>
+  <div class="chips">${[['w','Esta semana'],['q','Esta quincena'],['m','Este mes'],['pm','Mes pasado']].map(([k,t])=>`<button class="chip ${S.period===k?'on':''}" onclick="S.period='${k}';S.selDay=null;render()">${t}</button>`).join('')}</div>
+  ${IN.length?`<div class="sect" style="margin-top:4px">💡 Lo que vemos</div>${IN.map(x=>`<div class="ins" style="background:${tone[x.c][0]};color:${tone[x.c][1]}${x.act?';cursor:pointer':''}" ${x.act?`onclick="${x.act}"`:''}>${x.t}</div>`).join('')}`:''}
+  <div class="card" style="margin-top:12px"><h2>🧾 Resumen · ${R.lbl}</h2>
+    ${line('Empezaste con',D.start)}
+    ${line('+ Ingresaste',D.I,'pos')}
+    ${D.TI>0.5?line('+ Te pasaron',D.TI,'pos'):''}
+    ${line('− Apartaste',-D.A)}
+    ${line('= Quedó libre',D.libreTras,'',true)}
+    ${line('− Gastaste',-D.G,'neg')}
+    ${D.TOby.map(([n,v])=>line('− Le diste a '+esc(n),-v,'neg')).join('')}
+    ${Math.abs(D.AJ)>0.5?line('± Ajustes',D.AJ):''}
+    ${line('= Te quedan',D.end,D.end<0?'neg':'',true)}
+    <div class="tri" style="margin-top:12px"><span>Gastaste<b>${money(D.perDay)}/día</b>${D.elapsed} día${D.elapsed>1?'s':''}</span><span>Podías<b>${money(D.couldDay)}/día</b>${D.totalDays} días</span>
+      ${D.canDay!==null?`<span>Puedes ahora<b class="${canCls}">${money(Math.max(0,D.canDay))}/día</b>${D.remain} día${D.remain>1?'s':''}</span>`:`<span>Te sobró<b>${money(D.end)}</b>al cierre</span>`}</div></div>
+  <div class="card"><h2>💸 En qué se fue · ${money(tot)}</h2>
+    <div class="chips" style="margin-bottom:6px">${[['todo','Todo'],['libre','💸 Dinero libre'],['apartados','🎯 De apartados']].map(([k,t])=>`<button class="chip ${S.origin===k?'on':''}" style="padding:6px 11px;font-size:13px" onclick="S.origin='${k}';render()">${t}</button>`).join('')}</div>
     ${diff!==null?`<div class="mu">${diff>0?'🔺':'🔻'} ${Math.abs(Math.round(diff))}% vs periodo anterior (${money(prev)})</div>`:'<div class="mu">Sin datos del periodo anterior para comparar</div>'}
-    ${cats.length?`<div class="sect" style="margin:14px 0 0">Por categoría</div>${hbars(cats.map(([c,v],i)=>[c,v,catIc(c),PAL[i%PAL.length]]),cats[0][1])}
+    ${rows.length?`${hbars(rows,rows[0][1])}
       ${S.origin==='todo'&&srcs.length>1?`<div class="sect" style="margin:14px 0 0">De dónde salió</div>${hbars(srcs.map(([c,v])=>[c,v,c==='Dinero libre'?'💸':'🎯',c==='Dinero libre'?'#10b981':'#7c3aed']),srcs[0][1])}`:''}
-      <div class="sect" style="margin:14px 0 0">Cómo pagaste</div>${hbars(accs.map(([n,v])=>[n,v,'',accColor(n)]),accs[0][1])}
-      <button class="gh full" style="margin-top:10px" onclick="S.showDet=!S.showDet;render()">${S.showDet?'Ocultar detalle':`Ver detalle (${gs.length})`}</button>
-      ${S.showDet?gs.map(movRow).join(''):''}`:'<div class="empty"><span>🧾</span>No hay gastos en este periodo</div>'}</div>
-  <div class="card"><h2>💵 Ingresos · ${R.lbl}</h2><div style="font-size:28px;font-weight:800" class="pos">${money(tin)}</div>
-    ${ins.length?`<div class="sect" style="margin:12px 0 0">Por persona</div>${hbars(group(ins,movOwner).map(([n,v],i)=>[n,v,'👤',PAL[(i+3)%PAL.length]]),group(ins,movOwner)[0][1])}
-      <div class="sect" style="margin:12px 0 0">Por concepto</div>${hbars(group(ins,m=>m.category||'Sin concepto').map(([n,v],i)=>[n,v,'💵','#10b981']),group(ins,m=>m.category||'Sin concepto')[0][1])}`:'<p class="mu">Sin ingresos en este periodo</p>'}</div>
-  <div class="card"><h2>⚖️ Balance · ${R.lbl}</h2>
-    <div class="row"><span>💵 Ingresaste</span><b class="pos">${money(tin)}</b></div>
-    <div class="row"><span>🎯 Apartaste</span><b>${money(-apt)}</b></div>
-    <div class="row"><span>💸 Gastaste de dinero libre</span><b class="neg">${money(-gLibre)}</b></div>
-    ${Math.abs(trn)>0.5?`<div class="row"><span>🔁 Transferencias (neto)</span><b class="${trn<0?'neg':'pos'}">${money(trn)}</b></div>`:''}
-    <div class="row" style="border-top:1px solid var(--ln);padding-top:10px"><span class="b">Te sobró</span><b class="${tin-apt-gLibre+trn<0?'neg':'pos'}">${money(tin-apt-gLibre+trn)}</b></div></div>
+      <div class="sect" style="margin:14px 0 0">Cómo pagaste</div>${hbars(accs.map(([n,v])=>[n,v,'',accColor(n)]),accs[0][1])}`:'<div class="empty"><span>🧾</span>No hay gastos en este periodo</div>'}</div>
+  <div class="card"><button class="gh full row" style="padding:0" onclick="S.openDay=!S.openDay;render()"><span class="b" style="color:var(--tx)">📅 Día a día</span><span>${S.openDay?'▲':'▼'}</span></button>
+    ${S.openDay?`<div class="days" style="height:${H+34}px">
+      <i class="cap" style="bottom:${22+Math.min(H,D.couldDay/dmax*H)}px"><em>podías ${money(D.couldDay)}</em></i>
+      ${dayList.map(d=>{ const v=byDay[d]||0, h=v?Math.max(3,v/dmax*H):2, over=v>D.couldDay+0.5;
+        return `<button class="dcol${sel===d?' on':''}" onclick="S.selDay=${sel===d?'null':`'${d}'`};render()"><small>${v>=1?money(v).replace('$',''):''}</small><i style="height:${h}px;background:${v?over?'var(--rd)':'#7c3aed':'var(--ln)'}"></i><span>${+d.slice(8)}</span></button>`; }).join('')}</div>
+      ${sel?`<div class="sect" style="margin:12px 0 4px">${DOW[toDate(sel).getDay()]} ${fmtD(sel)} · ${money(byDay[sel]||0)}</div>${(groupsDay[sel]||[]).map(movRow).join('')||'<p class="mu">No salió dinero este día 🎉</p>'}`:'<p class="mu sm" style="margin-bottom:0">Toca un día para ver qué se gastó. En rojo, los días que te pasaste de lo que podías.</p>'}`:''}</div>
+  <div class="card"><button class="gh full row" style="padding:0" onclick="S.showDet=!S.showDet;render()"><span class="b" style="color:var(--tx)">🧾 Detalle · ${gs.length} movimiento${gs.length===1?'':'s'}</span><span>${S.showDet?'▲':'▼'}</span></button>
+    ${S.showDet?Object.keys(groupsDay).sort().reverse().map(d=>`<div class="sect row" style="margin:14px 0 2px"><span>${DOW[toDate(d).getDay()]} ${fmtD(d)}</span><span>${money(byDay[d])}</span></div>${groupsDay[d].map(movRow).join('')}`).join('')||'<p class="mu">Sin movimientos</p>':''}</div>
+  <div class="card"><button class="gh full row" style="padding:0" onclick="S.showIn=!S.showIn;render()"><span class="b" style="color:var(--tx)">💵 Ingresos · ${money(D.I)}</span><span>${S.showIn?'▲':'▼'}</span></button>
+    ${S.showIn?(ins.length?`<div class="sect" style="margin:12px 0 0">Por persona</div>${hbars(group(ins,movOwner).map(([n,v],i)=>[n,v,'👤',PAL[(i+3)%PAL.length]]),group(ins,movOwner)[0][1])}
+      <div class="sect" style="margin:12px 0 0">Por concepto</div>${hbars(group(ins,m=>m.category||'Sin concepto').map(([n,v])=>[n,v,'💵','#10b981']),group(ins,m=>m.category||'Sin concepto')[0][1])}`:'<p class="mu">Sin ingresos en este periodo</p>'):''}</div>
   <div class="card"><h2>🔮 ¿Te alcanza?</h2>
     <div class="row"><span>Tus apartados piden por quincena</span><b>${money(cuotas)}</b></div>
     <div class="row"><span>Tu ingreso promedio por quincena</span><b>${money(prom)}</b></div>
