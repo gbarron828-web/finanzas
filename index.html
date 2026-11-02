@@ -95,7 +95,10 @@ nav .fab{flex:none;width:56px;height:56px;border-radius:50%;background:linear-gr
 .pups{position:absolute;bottom:4px;transform:translateX(-100%);display:flex;gap:0;align-items:flex-end;pointer-events:none}
 .pup{width:28px;height:19px}
 .pups.run .pup{animation:hop .34s ease-in-out infinite alternate}
-.pups.run .pups.run .pups.run .pups.sleep .pup{transform-origin:50% 100%;animation:breathe 2.6s ease-in-out infinite}
+.pups.run .pup:nth-child(2){animation-delay:.17s}
+.pups.run .pup .lg{transform-box:fill-box;transform-origin:50% 0;animation:leg .34s ease-in-out infinite alternate}
+.pups.run .pup .lg.b{animation-direction:alternate-reverse}
+.pups.sleep .pup{transform-origin:50% 100%;animation:breathe 2.6s ease-in-out infinite}
 .pups.sleep .pup:nth-child(2){animation-delay:1.1s}
 .pups.sit .pup{transform-origin:50% 100%;animation:breathe .7s ease-in-out infinite}
 .pups.sit .tongue{transform-box:fill-box;transform-origin:50% 0;animation:pant .35s ease-in-out infinite alternate}
@@ -608,7 +611,7 @@ function vInicio(){
   const banks=S.accounts.map(a=>({a,v:accSaved(a.name)})).filter(x=>Math.abs(x.v)>0.5||+x.a.tope);
   const last=S.movs.filter(movMine).slice(0,6);
   const empty=!S.movs.length&&!S.goals.length;
-  return `<div class="row"><div class="row" style="gap:10px;justify-content:flex-start"><img src="icon.png" alt="" style="width:46px;height:46px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.12)"><div><h1 style="margin-bottom:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div><button class="sec mini" onclick="go('config')">⚙️</button></div>
+  return `<div class="row"><div class="row" style="gap:10px;justify-content:flex-start"><img src="icon.png" alt="" style="width:46px;height:46px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.12)"><div><h1 style="margin-bottom:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div></div>
   <div style="height:12px"></div>${whoBar()}
   ${empty?`<div class="card empty"><span>🚀</span><b>Empecemos</b><br>1. Ingresa el dinero que tienes hoy<br>2. Crea tus apartados<br>3. Reparte, y lo que quede es tu saldo libre
     <div class="grid2" style="margin-top:14px"><button class="ok" onclick="sheetIngreso()">💵 Ingresar</button><button onclick="go('apartados');setTimeout(()=>sheetEdit('new'),60)">🎯 Crear apartado</button></div></div>`:''}
@@ -923,7 +926,7 @@ function delPantry(id){ if(!confirm('¿Borrar este producto?')) return; db({tabl
 // ---------- CONFIGURACIÓN ----------
 function vConfig(){
   const cats=S.hh.categories||[];
-  return `<div class="row"><h1>⚙️ Configuración</h1><button class="sec mini" onclick="go('inicio')">‹ Volver</button></div>
+  return `<div class="row"><h1>⚙️ Ajustes</h1></div>
   <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-bottom:12px">
   <div class="card"><div class="row"><h2 style="margin:0">🏦 Bancos</h2><button class="mini" onclick="sheetAcc('new')">＋ Agregar</button></div>
     ${S.accounts.map(a=>`<div class="item" onclick="sheetAcc('${a.id}')" style="cursor:pointer"><div class="ic" style="background:${a.color}22;color:${a.color}">🏦</div><div class="grow"><div class="row"><span class="nm">${esc(a.name)}</span><b>${money(accSaved(a.name,true))}</b></div>
