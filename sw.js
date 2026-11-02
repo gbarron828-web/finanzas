@@ -1,5 +1,5 @@
 // Guarda la app en el teléfono para que abra rápido y sin internet
-const CACHE = 'finanzas-v11';
+const CACHE = 'finanzas-v12';
 const LOCAL = ['./', './index.html', './icon.png', './logo.svg'];
 const LIBS = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
