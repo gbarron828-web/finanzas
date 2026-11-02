@@ -63,11 +63,11 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .pick button.on{border-color:var(--pr);background:var(--prl);color:var(--pr)}
 .amt{font-size:34px;font-weight:800;text-align:center;border:0;background:var(--prl);color:var(--pr)}
 nav{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--ln);display:flex;justify-content:space-around;align-items:flex-end;padding:6px 6px calc(env(safe-area-inset-bottom) + 6px);z-index:5}
-nav button{background:none;color:var(--mu);font-size:10px;padding:6px 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:600;flex:1}
+nav button{background:none;color:var(--mu);font-size:11px;padding:6px 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:600;flex:1}
 nav button span{font-size:20px}
 nav .badge{position:absolute;top:2px;right:calc(50% - 20px);min-width:16px;height:16px;border-radius:8px;background:var(--rd);color:#fff;font-size:10px;font-style:normal;font-weight:800;line-height:16px;padding:0 4px}
 nav button.on{color:var(--pr)}
-nav .fab{flex:none;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:30px;margin:-24px 2px 2px;box-shadow:0 8px 20px rgba(79,70,229,.45);padding:0;justify-content:center}
+nav .fab{flex:none;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:30px;margin:-26px 6px 2px;box-shadow:0 8px 20px rgba(79,70,229,.45);padding:0;justify-content:center}
 #sheet{position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:20;display:none;align-items:flex-end;justify-content:center}
 #sheet.show{display:flex}
 #sheet .box{background:#fff;width:100%;max-width:560px;border-radius:26px 26px 0 0;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;animation:up .22s ease}
@@ -127,12 +127,10 @@ a{color:var(--pr);font-weight:600;text-decoration:none}
 <div id="app"><p class="mu" style="text-align:center;margin-top:40vh">Cargando…</p></div>
 <nav id="nav" hidden>
   <button data-t="inicio" onclick="go('inicio')"><span>🏠</span>Inicio</button>
-  <button data-t="repartir" onclick="go('repartir')"><span>📥</span>Repartir</button>
   <button data-t="apartados" onclick="go('apartados')"><span>🎯</span>Apartados</button>
   <button class="fab" onclick="sheetPlus()">＋</button>
   <button data-t="analisis" onclick="go('analisis')"><span>📊</span>Análisis</button>
-  <button data-t="anaquel" onclick="go('anaquel')" style="position:relative"><span>🧺</span>Anaquel<em id="anqBadge" class="badge" hidden></em></button>
-  <button data-t="config" onclick="go('config')"><span>⚙️</span>Ajustes</button>
+  <button data-t="mas" onclick="go('mas')" style="position:relative"><span>☰</span>Más<em id="anqBadge" class="badge" hidden></em></button>
 </nav>
 <div id="sheet" onclick="if(event.target===this)closeSheet()"><div class="box" id="sbox"><div class="shead"><div class="grab"></div><button class="xbtn" onclick="closeSheet()" aria-label="Cerrar">✕</button></div><div id="sheetBody"></div></div></div>
 <div id="toast"></div>
@@ -363,8 +361,8 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) { flush(
 function render(){
   if(!S.hh) return;
   $('#nav').hidden=false;
-  document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab));
-  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({inicio:vInicio,repartir:vRepartir,apartados:vApartados,analisis:vAnalisis,config:vConfig,anaquel:vAnaquel}[S.tab])();
+  const navT={anaquel:'mas',config:'mas',repartir:'inicio'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
+  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({inicio:vInicio,repartir:vRepartir,apartados:vApartados,analisis:vAnalisis,config:vConfig,anaquel:vAnaquel,mas:vMas}[S.tab])();
   renderNet(); const n=S.pantry.filter(p=>pst(p).c!=='green').length, bd=$('#anqBadge'); if(bd){ bd.hidden=!n; bd.textContent=n; }
 }
 function go(t){ S.tab=t; render(); scrollTo(0,0); }
@@ -623,7 +621,7 @@ function vInicio(){
       <div class="pill"><span class="mu sm">Apartado</span><b>${money(apartadoQ(q))}</b></div>
       <div class="pill"><span class="mu sm">Gastado</span><b>${money(gastadoQ(q))}</b></div></div>
     <div class="mu sm" style="margin-top:8px">Montos de esta quincena</div></div>
-  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="sheetApartar()">🎯<br><small>Apartar</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
+  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">📥<br><small>Repartir</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
   ${alerts.map(([g,s])=>`<div class="alert" onclick="sheetGoal('${g.id}')" style="cursor:pointer">${esc(g.icon||'⚠️')} <span><b>${esc(g.name)}</b>: ${s.st}</span></div>`).join('')}
   ${fijos.length?`<div class="card"><h2>📆 Próximos pagos</h2>${fijos.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${deudas.length?`<div class="card"><h2>🤝 Deudas</h2>${deudas.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
@@ -878,10 +876,11 @@ function vAnaquel(){
       <div class="grow" onclick="sheetPantry('${p.id}')" style="cursor:pointer"><div class="row"><span class="nm">${esc(p.name)}${p.qty?` <span class="mu">· ${esc(p.qty)}</span>`:''}</span><span class="st ${s.c}">${s.t}</span></div>
         <div class="bar"><i style="width:${s.pct}%;background:${col[s.c]}"></i></div>
         <div class="mu sm" style="margin-top:5px">Compraste ${fmtD(p.last_bought)} · dura ~${s.est} d${s.learned?` (aprendido de ${s.learned})`:''} · se acaba ${fmtD(s.endISO)}</div>
+        ${(()=>{ const pi=priceInfo(p); return pi?`<div class="sm" style="margin-top:4px"><b>${money(pi.p)}</b>${pi.diff!==null&&Math.abs(pi.diff)>=1?` <span class="${pi.diff>0?'neg':'pos'}">${pi.diff>0?'▲':'▼'} ${money(Math.abs(pi.diff))} (${pi.pct>0?'+':''}${Math.round(pi.pct)}%)</span>`:''} <span class="mu">· ~${money(pi.mes)} al mes</span></div>`:''; })()}
         <div class="row" style="gap:6px;margin-top:8px;justify-content:flex-start" onclick="event.stopPropagation()">
           <button class="mini ok" onclick="pantryBuy('${p.id}')">🛒 Ya lo compré</button>
           ${p.empty?'':`<button class="mini sec" onclick="pantryOut('${p.id}')">😮 Se acabó</button>`}</div></div></div>`; };
-  return `<div class="row"><h1>🧺 Vida de anaquel</h1><button class="mini" onclick="sheetPantry('new')">＋ Producto</button></div>
+  return `<button class="gh mini" style="padding-left:0" onclick="go('mas')">‹ Más</button><div class="row"><h1>🧺 Vida de anaquel</h1><button class="mini" onclick="sheetPantry('new')">＋ Producto</button></div>
   <p class="mu" style="margin-top:-6px">Lo que hay en casa y cuándo se acaba. No toca tus finanzas.</p>
   ${compra.length?`<div class="card" style="border:2px solid var(--wal)"><h2>📝 Lista del súper · ${compra.length}</h2>
     ${compra.map(p=>{ const s=pst(p); return `<div class="row" style="padding:6px 0;border-top:1px solid var(--ln)"><span>${esc(p.icon||'🛒')} <b>${esc(p.name)}</b> <span class="st ${s.c}">${s.t}</span></span><button class="mini ok" onclick="pantryBuy('${p.id}')">✓</button></div>`; }).join('')}</div>`:''}
@@ -909,10 +908,28 @@ function savePantry(id){
   if(id==='new'){ row.sort=S.pantry.length; db({table:'pantry',action:'insert',row}); } else db({table:'pantry',action:'update',row,match:{id}});
   closeSheet(); toast('✅ Guardado');
 }
-function pantryBuy(id){
+function pantryBuy(id){ // ventanita rápida: precio opcional
+  const p=S.pantry.find(x=>x.id===id), last=lastPrice(p);
+  openSheet(`<h1 style="text-align:center">${esc(p.icon||'🛒')} ${esc(p.name)}</h1>
+  <p class="mu" style="text-align:center;margin-top:-6px">¿Cuánto costó? (opcional)</p>
+  <input id="pb_price" class="amt" style="background:var(--okl);color:#047857" type="number" inputmode="decimal" placeholder="${last?'$'+Math.round(last.p):'$0'}">
+  ${last?`<p class="mu sm" style="text-align:center">La vez pasada: ${money(last.p)} (${fmtD(last.d)})</p>`:''}
+  <div class="grid2" style="margin-top:14px"><button class="sec" onclick="pantryBuyDo('${id}',null)">Saltar</button><button class="ok" onclick="pantryBuyDo('${id}',num($('#pb_price').value)||null)">Guardar</button></div>`);
+  setTimeout(()=>$('#pb_price')?.focus(),250);
+}
+const lastPrice = p => { const a=p.prices||[]; return a.length?a[a.length-1]:null; };
+function priceInfo(p){ // último precio, cambio contra el anterior y costo al mes
+  const a=(p.prices||[]).filter(x=>+x.p>0); if(!a.length) return null;
+  const l=a[a.length-1], prev=a.length>1?a[a.length-2]:null, est=pst(p).est;
+  return {p:+l.p, diff:prev?+l.p-+prev.p:null, pct:prev&&+prev.p?(+l.p-+prev.p)/+prev.p*100:null, mes:+l.p/est*30};
+}
+function pantryBuyDo(id,price){
   const p=S.pantry.find(x=>x.id===id), d=daysBetween(p.last_bought,todayISO()), ds=[...(p.durations||[])];
   if(!p.empty&&d>=1) ds.push(d);
-  db({table:'pantry',action:'update',row:{last_bought:todayISO(),empty:false,durations:ds.slice(-6)},match:{id}});
+  const row={last_bought:todayISO(),empty:false,durations:ds.slice(-6)};
+  if(price) row.prices=[...(p.prices||[]),{d:todayISO(),p:price}].slice(-24);
+  closeSheet();
+  db({table:'pantry',action:'update',row,match:{id}});
   toast(`🛒 ${p.name}: listo, se acabará ~${fmtD(pst({...p,last_bought:todayISO(),empty:false,durations:ds.slice(-6)}).endISO)}`);
 }
 function pantryOut(id){
@@ -923,11 +940,20 @@ function pantryOut(id){
 }
 function delPantry(id){ if(!confirm('¿Borrar este producto?')) return; db({table:'pantry',action:'delete',match:{id}}); closeSheet(); }
 
+// ---------- MÁS ----------
+function vMas(){
+  const n=S.pantry.filter(p=>pst(p).c!=='green').length;
+  return `<h1>☰ Más</h1>
+  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('anaquel')"><div class="ic" style="background:var(--okl)">🧺</div><div class="grow"><div class="row"><span class="nm">Vida de anaquel</span>${n?`<span class="st red">${n} por comprar</span>`:'<span class="st green">Todo bien</span>'}</div><div class="mu">Lo que hay en casa, cuándo se acaba y cuánto cuesta</div></div></div>
+  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('repartir')"><div class="ic" style="background:var(--prl)">📥</div><div class="grow"><div class="nm">Repartir</div><div class="mu">Mandar tu dinero sin repartir a tus apartados</div></div></div>
+  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('config')"><div class="ic" style="background:var(--bg)">⚙️</div><div class="grow"><div class="nm">Ajustes</div><div class="mu">Bancos, categorías, personas y código para invitar</div></div></div>
+  <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-top:6px;opacity:.95">`;
+}
+
 // ---------- CONFIGURACIÓN ----------
 function vConfig(){
   const cats=S.hh.categories||[];
-  return `<div class="row"><h1>⚙️ Ajustes</h1></div>
-  <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-bottom:12px">
+  return `<button class="gh mini" style="padding-left:0" onclick="go('mas')">‹ Más</button><div class="row"><h1>⚙️ Ajustes</h1></div>
   <div class="card"><div class="row"><h2 style="margin:0">🏦 Bancos</h2><button class="mini" onclick="sheetAcc('new')">＋ Agregar</button></div>
     ${S.accounts.map(a=>`<div class="item" onclick="sheetAcc('${a.id}')" style="cursor:pointer"><div class="ic" style="background:${a.color}22;color:${a.color}">🏦</div><div class="grow"><div class="row"><span class="nm">${esc(a.name)}</span><b>${money(accSaved(a.name,true))}</b></div>
       <div class="mu">${+a.tope?'Tope '+money(a.tope):'Sin tope'}${+a.rate?' · '+(+a.rate)+'% anual':''}</div></div></div>`).join('')}</div>
