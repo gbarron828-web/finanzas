@@ -509,14 +509,19 @@ async function logout(){
 function sheetPlus(){
   openSheet(`<h1 style="text-align:center">¿Qué quieres hacer?</h1>
   <div style="display:grid;gap:10px">
-    <button class="big ok" onclick="sheetIngreso()"><span>💵</span><div><b>Ingresar dinero</b><small>Me pagaron, me depositaron</small></div></button>
-    <button class="big" onclick="sheetApartar()"><span>🎯</span><div><b>Apartar</b><small>Mandar dinero a un apartado</small></div></button>
     <button class="big dgb" onclick="sheetGasto()"><span>💸</span><div><b>Registrar gasto</b><small>Gasolina, comida, cine…</small></div></button>
-    <button class="big" style="background:#0891b2" onclick="sheetTransfer()"><span>🔁</span><div><b>Transferir</b><small>Mandar dinero entre ${esc(people().filter(p=>p!=='Compartido').join(' y ')||'ustedes')}</small></div></button>
-    <button class="big sec" onclick="sheetMover()"><span>🔀</span><div><b>Mover entre mis cuentas</b><small>Cajero, de un banco a otro · no es gasto</small></div></button>
+    <button class="big ok" onclick="sheetIngreso()"><span>💵</span><div><b>Ingresar dinero</b><small>Me pagaron, me depositaron</small></div></button>
+    <button class="big" onclick="closeSheet();go('repartir')"><span>🎯</span><div><b>Apartar</b><small>Mandar dinero a tus apartados</small></div></button>
+    <button class="big" style="background:#0891b2" onclick="sheetMoverMenu()"><span>🔁</span><div><b>Mover dinero</b><small>A ${esc(people().filter(p=>p!=='Compartido'&&p!==meName())[0]||'otra persona')} o entre tus cuentas</small></div></button>
   </div>`);
 }
-
+function sheetMoverMenu(){
+  openSheet(`<h1 style="text-align:center">🔁 Mover dinero</h1>
+  <div style="display:grid;gap:10px">
+    <button class="big" style="background:#0891b2" onclick="sheetTransfer()"><span>👤</span><div><b>A otra persona</b><small>Le pasas dinero a ${esc(people().filter(p=>p!=='Compartido').join(' o ')||'alguien')}</small></div></button>
+    <button class="big sec" onclick="sheetMover()"><span>🏦</span><div><b>Entre mis cuentas</b><small>Cajero, de Banorte a Mercado Pago… no es gasto</small></div></button>
+  </div>`);
+}
 // ---------- TRANSFERENCIA entre personas ----------
 let T={};
 function sheetTransfer(){
@@ -567,7 +572,7 @@ function saveIngreso(){
   const a=num($('#i_amt').value); if(a<=0) return toast('Escribe el monto');
   db({table:'movements',action:'insert',row:{goal_id:null,kind:'ingreso',amount:a,account:I.acc,category:($('#i_note').value.trim()||null),owner:I.who,date:$('#i_date').value||todayISO()}});
   closeSheet(); if(isVales(I.acc)) return toast(`🎟️ ${money(a)} a ${I.acc} · los vales no tocan tu saldo libre`);
-  S.tab='repartir'; render(); toast(`💵 Ingresaste ${money(a)} · tienes ${money(libre())} sin repartir`);
+  S.tab='repartir'; render(); scrollTo(0,0); toast(`💵 Ingresaste ${money(a)} · ahora apártalo a donde quieras`);
 }
 
 // ---------- APARTAR ----------
@@ -823,48 +828,53 @@ function todayCard(){
     ${L.d7>=3?`<div class="mu sm" style="margin-top:4px">Últimos ${L.d7} días: ${money(L.avg7)}/día · ${L.avg7<=L.amt+0.5?`<span class="pos">${money(L.amt-L.avg7)}/día abajo del límite 👏</span>`:`<span class="neg">${money(L.avg7-L.amt)}/día arriba del límite</span>`}${L.avg7>0.5?` · a ese ritmo tu libre dura ~${Math.max(0,Math.floor(L.lib/L.avg7))} días`:''}</div>`:''}`; }).join('')}</div>`;
 }
 function vInicio(){
-  const q=currentQ(), nq=shiftQ(q,1), l=libre(), dl=daysLeft(), gs=activeGoals();
+  const q=currentQ(), nq=shiftQ(q,1), l=libre(), dl=daysLeft(), gs=activeGoals().filter(g=>!ex(g).card);   // tarjetas viven en Cuentas
   const byDue=(a,b)=>(a.due_date||'9')<(b.due_date||'9')?-1:1;
-  const fijos=gs.filter(g=>g.kind==='fijo').sort(byDue), deudas=gs.filter(g=>g.kind==='pago'&&!(ex(g).card&&gst(g).tgt<=0.5&&gst(g).saldo<=0.5)).sort(byDue), metas=gs.filter(g=>g.kind==='meta');
-  const alerts=gs.map(g=>[g,gst(g)]).filter(([g,s])=>s.stc==='red');
+  const fijos=gs.filter(g=>g.kind==='fijo').sort(byDue), deudas=gs.filter(g=>g.kind==='pago').sort(byDue), metas=gs.filter(g=>g.kind==='meta');
+  const alerts=activeGoals().map(g=>[g,gst(g)]).filter(([g,s])=>s.stc==='red');
   const accs=liveAccs().filter(accMine), tH=sum(accs.filter(a=>atype(a)!=='tdc').map(accBal)), tC=sum(accs.filter(a=>atype(a)==='tdc').map(a=>cardInfo(a).debt));
   const tD=sum(debtGoals().map(g=>Math.max(0,+g.target-gst(g).pagado))), unOk=accs.filter(a=>!accOk(a)).length;
-  const last=S.movs.filter(m=>movMine(m)&&m.kind!=='carga').slice(0,6);
+  const apart=sum(activeGoals().map(g=>Math.max(0,gst(g).saldo)));
+  const last=S.movs.filter(m=>movMine(m)&&m.kind!=='carga').slice(0,4);
   const empty=!S.movs.length&&!S.goals.length;
+  const ls=limitPeople().map(limitOf), hoy=ls.length?sum(ls.map(L=>L.hoy)):Math.max(0,l/dl);
+  const L1=ls.length===1?ls[0]:null;
+  const hoySub = ls.length
+    ? (L1 ? (L1.bolsa<-0.5?`Vas ${money(-L1.bolsa)} arriba de tu límite · mañana ${money(Math.max(0,Math.min(L1.bolsa+L1.amt,L1.lib)))}`
+              : `Límite ${money(L1.amt)}/día${L1.acum>0.5?` · traes ${money(L1.acum)} acumulado`:L1.acum<-0.5?` · se descuentan ${money(-L1.acum)}`:''}${L1.spentToday>0.5?` · hoy llevas ${money(L1.spentToday)}`:''}`)
+         : ls.map(L=>`${esc(L.p)} ${money(L.hoy)}`).join(' · '))
+    : (l>0.5?`Tu libre repartido en ${dl} día${dl>1?'s':''} hasta el ${fmtD(nq)}`:l<-0.5?'Gastaste o apartaste más de lo que ingresaste':'Sin dinero libre por ahora');
+  const box=(lb,v,go,cls='')=>`<div class="pill" onclick="${go}" style="cursor:pointer"><span class="mu sm">${lb}</span><b class="${cls}">${money(v)}</b></div>`;
   return `<div class="row"><div class="row" style="gap:10px;justify-content:flex-start"><img src="icon.png" alt="" style="width:46px;height:46px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.12)"><div><h1 style="margin-bottom:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div></div>
   <div style="height:12px"></div>${whoBar()}
   ${empty?`<div class="card empty"><span>🚀</span><b>Empecemos</b><br>1. Ingresa el dinero que tienes hoy<br>2. Crea tus apartados<br>3. Reparte, y lo que quede es tu saldo libre
     <div class="grid2" style="margin-top:14px"><button class="ok" onclick="sheetIngreso()">💵 Ingresar</button><button onclick="go('apartados');setTimeout(()=>sheetEdit('new'),60)">🎯 Crear apartado</button></div></div>`:''}
-  <div class="hero"><div class="mu">💸 Saldo libre</div>
-    <div class="big">${money(l)}</div>
-    <div class="mu">${l>0.5?`≈ <b style="color:#fff">${money(l/dl)} por día</b> hasta el ${fmtD(nq)} · ${dl} días`:l<-0.5?'Gastaste o apartaste más de lo que ingresaste':'Sin dinero libre por ahora'}</div>
-    <div class="row" style="margin-top:14px;gap:8px">
-      <div class="pill"><span class="mu sm">Ingresó</span><b>${money(ingresadoQ(q))}</b></div>
-      <div class="pill"><span class="mu sm">Apartado</span><b>${money(apartadoQ(q))}</b></div>
-      <div class="pill"><span class="mu sm">Gastado</span><b>${money(gastadoQ(q))}</b></div></div>
-    <div class="mu sm" style="margin-top:8px">Montos de esta quincena</div></div>
-  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">📥<br><small>Repartir</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
-  ${todayCard()}
+  <div class="hero"><div class="mu">🐷 Hoy puedes gastar</div>
+    <div class="big">${money(hoy)}</div>
+    <div class="mu">${hoySub}</div>
+    <div class="grid2" style="margin-top:14px;gap:8px">
+      ${box('💸 Libre',l,"go('movs')",'')}${box('🎯 Apartado',apart,"go('apartados')")}
+      ${box('💳 Debes',tC+tD,"go('cuentas')")}${box('💎 Patrimonio',tH-tC-tD,"go('cuentas')")}</div>
+    ${unOk?`<div class="mu sm" style="margin-top:8px;cursor:pointer" onclick="go('cuentas')">⚖️ ${unOk} cuenta(s) sin cuadrar con el banco ›</div>`:''}</div>
+  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">🎯<br><small>Apartar</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
   ${alerts.map(([g,s])=>`<div class="alert" onclick="sheetGoal('${g.id}')" style="cursor:pointer">${esc(g.icon||'⚠️')} <span><b>${esc(g.name)}</b>: ${s.st}</span></div>`).join('')}
   ${fijos.length?`<div class="card"><h2>📆 Próximos pagos</h2>${fijos.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${deudas.length?`<div class="card"><h2>🤝 Deudas</h2>${deudas.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${metas.length?`<div class="card"><h2>🎯 Metas</h2>${metas.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
-  <div class="card" onclick="go('cuentas')" style="cursor:pointer"><div class="row"><h2 style="margin:0">🏦 Mi dinero</h2><span class="mu">Ver cuentas ›</span></div>
-    <div class="tri"><span>Tienes<b>${money(tH)}</b></span><span>Debes<b class="${tC+tD>0.5?'neg':''}">${money(tC+tD)}</b></span><span>Neto<b>${money(tH-tC-tD)}</b></span></div>
-    ${unOk?`<div class="mu sm" style="margin-top:6px">⚖️ ${unOk} cuenta(s) sin cuadrar con el banco</div>`:''}</div>
   ${last.length?`<div class="card"><div class="row"><h2 style="margin:0">🧾 Últimos movimientos</h2><button class="gh mini" onclick="go('movs')">Ver todo 🔎</button></div>${last.map(movRow).join('')}</div>`:''}`;
 }
 
 // ---------- REPARTIR ----------
 function vRepartir(){
   const q=currentQ(), l=libre(), gs=activeGoals();
-  const groups=[['fijo','📆 Gastos fijos'],['pago','🤝 Deudas'],['meta','🎯 Metas']];
-  return `<h1>📥 Repartir</h1>${whoBar()}
+  const groups=[['fijo','📆 Gastos fijos'],['tdc','💳 Pago de tarjetas'],['pago','🤝 Deudas'],['meta','🎯 Metas']];
+  const inG=(g,k)=>k==='tdc'?!!ex(g).card:k==='pago'?g.kind==='pago'&&!ex(g).card:g.kind===k;
+  return `<button class="gh mini" style="padding-left:0" onclick="go('inicio')">‹ Inicio</button><h1>🎯 Apartar</h1>${whoBar()}
   <div class="hero" style="background:linear-gradient(135deg,#059669,#10b981 60%,#0ea5e9)"><div class="mu">Sin repartir</div><div class="big">${money(l)}</div>
     <div class="mu">Lo que no repartas se queda como tu saldo libre · ≈ ${money(Math.max(0,l)/daysLeft())} por día</div>
     <div class="row" style="margin-top:12px;gap:8px"><div class="pill"><span class="mu sm">Ingresó</span><b>${money(ingresadoQ(q))}</b></div><div class="pill"><span class="mu sm">Apartado</span><b>${money(apartadoQ(q))}</b></div><div class="pill"><span class="mu sm">Gastado</span><b>${money(gastadoQ(q))}</b></div></div></div>
   <button class="ok full" style="margin-bottom:12px" onclick="sheetIngreso()">💵 Ingresar dinero</button>
-  ${groups.map(([k,t])=>{ const list=gs.filter(g=>g.kind===k); if(!list.length) return '';
+  ${groups.map(([k,t])=>{ const list=gs.filter(g=>inG(g,k)); if(!list.length) return '';
     return `<div class="sect">${t}</div><div class="card">${list.map(g=>{ const s=gst(g), [bg,fg]=KCOL[g.kind];
       return `<div class="item"><div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div>
         <div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><span class="b">${money(g.kind==='pago'?s.avance:s.saldo)}${+g.target?`<span class="mu"> / ${money(g.target)}</span>`:''}</span></div>
@@ -887,12 +897,15 @@ function goalActions(g){
 }
 function vApartados(){
   const gs=activeGoals().filter(g=>S.bank==='Todos'||g.account===S.bank);
-  const groups=[['fijo','📆 Gastos fijos'],['pago','🤝 Deudas'],['meta','🎯 Metas de ahorro']];
+  const groups=[['fijo','📆 Gastos fijos'],['tdc','💳 Pago de tarjetas'],['pago','🤝 Deudas'],['meta','🎯 Metas de ahorro']];
+  const inG=(g,k)=>k==='tdc'?!!ex(g).card:k==='pago'?g.kind==='pago'&&!ex(g).card:g.kind===k;
   const arch=S.goals.filter(g=>g.archived&&mine(g));
   return `<div class="row"><h1>Apartados</h1><button class="mini" onclick="sheetEdit('new')">＋ Nuevo</button></div>
   ${whoBar()}
   <div class="chips">${['Todos',...moneyAccs().map(a=>a.name)].map(b=>`<button class="chip ${S.bank===b?'on':''}" onclick="S.bank='${esc(b)}';render()">${b==='Todos'?'🏦 Todos los bancos':`<i class="dot" style="background:${accColor(b)}"></i> ${esc(b)}`}</button>`).join('')}</div>
-  ${groups.map(([k,t])=>{ const list=gs.filter(g=>g.kind===k); if(!list.length) return '';
+  ${groups.map(([k,t])=>{ const list=gs.filter(g=>inG(g,k)); if(!list.length) return '';
+    if(k==='tdc') return `<div class="sect row"><span>${t}</span><span>${money(sum(list.map(g=>gst(g).saldo)))}</span></div><div class="card">${list.map(g=>{ const s=gst(g);
+      return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">💳</div><div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><b>${money(s.saldo)}</b></div><div class="row" style="margin-top:4px"><span class="st ${s.stc}">${s.st}</span><span class="mu sm">${s.tgt>0.5?'pagar '+money(s.tgt):''}</span></div></div></div>`; }).join('')}<p class="mu sm" style="margin:8px 0 0">Se apartan solos cuando pagas con tarjeta. El detalle está en <a href="#" onclick="event.preventDefault();go('cuentas')">Cuentas</a>.</p></div>`;
     return `<div class="sect row"><span>${t}</span><span>${money(sum(list.map(g=>gst(g).saldo)))}</span></div><div class="card">${list.map(g=>goalRow(g,{actions:1})).join('')}</div>`; }).join('')}
   ${!gs.length?`<div class="card empty"><span>🎯</span>${S.goals.length?'No hay apartados con este filtro.':'Crea tu primer apartado: renta, internet, Navidad, fondo médico…'}<br><button style="margin-top:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button></div>`:''}
   ${arch.length?`<div class="sect">🗄 Archivados</div><div class="card">${arch.map(g=>`<div class="row"><span>${esc(g.icon||'')} ${esc(g.name)}</span><button class="gh mini" onclick="db({table:'goals',action:'update',row:{archived:false},match:{id:'${g.id}'}})">Restaurar</button></div>`).join('')}</div>`:''}`;
@@ -1281,7 +1294,6 @@ function vMas(){
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y tarjetas</div><div class="mu">Saldos reales, tarjetas, vales y patrimonio</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('movs')"><div class="ic" style="background:#fff7ed">🔎</div><div class="grow"><div class="nm">Movimientos</div><div class="mu">Buscar y editar cualquier movimiento</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('anaquel')"><div class="ic" style="background:var(--okl)">🧺</div><div class="grow"><div class="row"><span class="nm">Vida de anaquel</span>${n?`<span class="st red">${n} por comprar</span>`:'<span class="st green">Todo bien</span>'}</div><div class="mu">Lo que hay en casa, cuándo se acaba y cuánto cuesta</div></div></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('repartir')"><div class="ic" style="background:var(--prl)">📥</div><div class="grow"><div class="nm">Repartir</div><div class="mu">Mandar tu dinero sin repartir a tus apartados</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('config')"><div class="ic" style="background:var(--bg)">⚙️</div><div class="grow"><div class="nm">Ajustes</div><div class="mu">Límite diario, categorías, personas y código para invitar</div></div></div>
   <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-top:6px;opacity:.95">`;
 }
@@ -1297,8 +1309,6 @@ function vConfig(){
     <div class="row"><input id="newcat" placeholder="Nueva (ej. 🧁 Postres)"><button class="mini" onclick="addCat()">Agregar</button></div></div>
   <div class="card"><h2>👥 Personas</h2>${S.members.map(m=>`<div class="row"><input id="mn_${m.user_id}" value="${esc(m.display_name||'')}"><button class="mini sec" onclick="renameMember('${m.user_id}')">Guardar</button></div>`).join('')}
     <div class="row" style="margin-top:14px"><span>Código para invitar</span><span class="code">${esc(S.hh.invite_code)}</span></div></div>
-  <div class="card"><h2>⚖️ Cuadrar saldo libre</h2><p class="mu" style="margin-top:0">Si tu dinero libre real no coincide con la app, suma o resta la diferencia.</p>
-    <div class="row"><input id="adj" type="number" inputmode="decimal" placeholder="Monto (+ o −)"><button class="mini" onclick="ajusteLibre()">Ajustar</button></div></div>
   <div class="card"><h2>🧹 Empezar de cero</h2><p class="mu" style="margin-top:0">Borra todos los apartados, ingresos y gastos${S.who!=='Todos'?'':' de los dos'}. Bancos, categorías y personas se quedan.</p>
     <button class="dg full" onclick="resetTodo()">Borrar todo</button></div>
   <button class="sec full" onclick="logout()">Cerrar sesión</button>`;
