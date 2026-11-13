@@ -854,11 +854,11 @@ function vInicio(){
   <div style="height:12px"></div>${whoBar()}
   ${empty?`<div class="card empty"><span>🚀</span><b>Empecemos</b><br>1. Ingresa el dinero que tienes hoy<br>2. Crea tus apartados<br>3. Reparte, y lo que quede es tu saldo libre
     <div class="grid2" style="margin-top:14px"><button class="ok" onclick="sheetIngreso()">💵 Ingresar</button><button onclick="go('apartados');setTimeout(()=>sheetEdit('new'),60)">🎯 Crear apartado</button></div></div>`:''}
-  <div class="hero"><div class="mu">🐷 Hoy puedes gastar</div>
-    <div class="big">${money(hoy)}</div>
-    <div class="mu">${hoySub}</div>
+  <div class="hero"><div class="mu">💸 Tu saldo libre</div>
+    <div class="big">${money(l)}</div>
+    <div class="mu">${l>0.5?`≈ <b style="color:#fff">${money(l/dl)} por día</b> hasta el ${fmtD(nq)} · ${dl} día${dl>1?'s':''}`:l<-0.5?'⚠️ Apartaste o gastaste más de lo que ingresaste':'Sin dinero libre por ahora'}</div>
     <div class="grid2" style="margin-top:14px;gap:8px">
-      ${box('💸 Libre',l,"go('movs')",'')}${box('🎯 Apartado',apart,"go('apartados')")}
+      ${box('💵 Ingresaste (quincena)',ingresadoQ(q),"S.mf='ingreso';go('movs')",'')}${box('🎯 Apartado',apart,"go('apartados')")}
       ${box('💳 Debes',tC+tD,"go('cuentas')")}${box('💎 Patrimonio',tH-tC-tD,"go('cuentas')")}</div>
     ${unOk?`<div class="mu sm" style="margin-top:8px;cursor:pointer" onclick="go('cuentas')">⚖️ ${unOk} cuenta(s) sin cuadrar con el banco ›</div>`:''}</div>
   <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">🎯<br><small>Apartar</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
