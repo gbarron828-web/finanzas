@@ -334,16 +334,17 @@ const accOk = a => S.movs.some(m=>m.account===a.name&&m.kind==='concilia');     
 function dayIn(y,m,d){ return iso(y,m,Math.min(d,new Date(y,m,0).getDate())); }
 function cardInfo(a){
   const debt=Math.max(0,-accBal(a)), t=todayISO(), [y,m]=t.split('-').map(Number), cd=+a.corte_day, pd=+a.pago_day;
-  let corte=null, due=null, stmt=debt, auto=true;
+  let corte=null, due=null, stmt=debt, auto=true, dueAprox=false;
   if(cd){ corte=dayIn(y,m,cd); if(corte>t){ const pm=m===1?12:m-1, py=m===1?y-1:y; corte=dayIn(py,pm,cd); }
     if(a.corte_date&&a.corte_bal!=null&&a.corte_date>=corte){ stmt=+a.corte_bal; auto=false; }
     else stmt=Math.max(0,-accBalAt(a,corte));
-    if(pd){ const [cy,cm]=corte.split('-').map(Number); due=pd>cd?dayIn(cy,cm,pd):dayIn(cm===12?cy+1:cy,cm===12?1:cm+1,pd); } }
+    if(pd){ const [cy,cm]=corte.split('-').map(Number); due=pd>cd?dayIn(cy,cm,pd):dayIn(cm===12?cy+1:cy,cm===12?1:cm+1,pd); }
+    else { due=addDays(corte,20); dueAprox=true; } }
   const ids=new Set(cardGoals(a.name).map(g=>g.id));
   const paid=corte?-sum(S.movs.filter(x=>x.kind==='pago'&&ids.has(x.goal_id)&&x.date>corte).map(x=>x.amount)):0;
   const sinInt=Math.max(0,Math.min(debt,stmt-paid));
   const lim=+a.limite||0;
-  return {debt,corte,due,stmt,auto,paid,sinInt,lim,avail:lim?lim-debt:null,use:lim?debt/lim*100:null};
+  return {debt,corte,due,dueAprox,stmt,auto,paid,sinInt,lim,avail:lim?lim-debt:null,use:lim?debt/lim*100:null};
 }
 // ---------- cálculos ----------
 const inQ = (m,q) => qOf(m.date)===q;
@@ -590,7 +591,18 @@ function sheetApartar(gid){
   <label style="display:flex;gap:10px;align-items:center;margin:12px 0 0;color:var(--tx)"><input id="prev_chk" type="checkbox" style="width:22px;height:22px;flex:none"><span>💰 <b>Ya lo tenía ahorrado</b> · no sale de mi dinero libre</span></label>
   <button class="full" style="margin-top:12px" onclick="saveApartar()">Apartar</button>`);
 }
-function apartarOps(g, amount, kind, note, date){
+function homeAcc(owner){ // la cuenta donde normalmente caen tus ingresos
+  const c={}; for(const m of S.movs) if(m.kind==='ingreso'&&movOwner(m)===owner&&acc(m.account)&&atype(acc(m.account))!=='vales') c[m.account]=(c[m.account]||0)+1;
+  const best=Object.entries(c).sort((a,b)=>b[1]-a[1])[0]; return best?best[0]:((moneyAccs()[0]||{}).name||null); }
+function withMoves(rows){ // si el apartado vive en otra cuenta, el dinero se mueve de verdad
+  const out=[];
+  for(const r of rows){ out.push(r); if(r.kind!=='aparta'&&r.kind!=='retira') continue;
+    const home=homeAcc(r.owner); if(!home||home===r.account||!acc(r.account)) continue;
+    const link=uuid(), v=Math.abs(+r.amount), from=r.kind==='aparta'?home:r.account, to=r.kind==='aparta'?r.account:home; r.link=link;
+    out.push({kind:'mueve',goal_id:null,account:from,amount:-v,category:to,owner:r.owner,date:r.date,note:'auto',link},{kind:'mueve',goal_id:null,account:to,amount:v,category:from,owner:r.owner,date:r.date,note:'auto',link}); }
+  return out; }
+function apartarOps(g, amount, kind, note, date){ return withMoves(apartarOps0(g, amount, kind, note, date)); }
+function apartarOps0(g, amount, kind, note, date){
   const base={goal_id:g.id,kind,date:date||todayISO(),note:note||null,owner:defOwner()};
   const a=acc(g.account);
   if(kind==='aparta' && a && +a.tope){
@@ -715,7 +727,7 @@ const MF={todo:['Todo',()=>true],gasto:['💸 Gastos',m=>m.kind==='gasto'],ingre
 const norm = x => String(x??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 function movList(){
   const f=MF[S.mf||'todo'][1], q=norm(S.q||'').trim(), qn=num(S.q);
-  const ms=S.movs.filter(m=>movMine(m)&&f(m)&&(S.mf==='apart'||m.kind!=='carga')&&(!q||norm([movLabel(m),m.note,m.category,m.account,movOwner(m),fmtD(m.date),m.date].join(' ')).includes(q)||(qn&&Math.round(Math.abs(+m.amount))===Math.round(qn))));
+  const ms=S.movs.filter(m=>movMine(m)&&f(m)&&!(m.kind==='mueve'&&m.note==='auto')&&(S.mf==='apart'||m.kind!=='carga')&&(!q||norm([movLabel(m),m.note,m.category,m.account,movOwner(m),fmtD(m.date),m.date].join(' ')).includes(q)||(qn&&Math.round(Math.abs(+m.amount))===Math.round(qn))));
   if(!ms.length) return '<div class="card empty"><span>🔎</span>No encontré movimientos</div>';
   const sh=ms.slice(0,S.mlim||120), by={}; for(const m of sh) (by[m.date]=by[m.date]||[]).push(m);
   const tot=sum(ms.map(m=>+m.amount));
@@ -783,7 +795,7 @@ function goalRow(g, opts={}){
       ${showBar?(opts.dogs?`<div class="track"><div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>${pups(s.pct, s.stc==='done'||s.pct>=99.5?'sit':s.pct<=0.5?'sleep':'run')}</div>`:`<div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>`):''}
       <div class="row" style="margin-top:6px"><span class="st ${s.stc}">${s.st}</span><span class="mu">${sub}</span></div>
       ${s.card?cardLine(g,s):g.subtype==='tdc'?tdcLine(g,s):''}
-      ${g.subtype==='tdc'&&!s.card&&!opts.dogs?`<div class="mu sm" style="margin-top:6px" onclick="event.stopPropagation()">💡 <a href="#" onclick="event.preventDefault();linkCard('${g.id}')">Convertir en tarjeta</a>: la deuda sube sola con tus gastos y la app calcula cuánto pagar.</div>`:''}
+      ${isOldCard(g)&&!opts.dogs?`<div class="mu sm" style="margin-top:6px" onclick="event.stopPropagation()">💡 <a href="#" onclick="event.preventDefault();linkCard('${g.id}')">Convertir en tarjeta</a>: la deuda sube sola con tus gastos y la app calcula cuánto pagar.</div>`:''}
       ${g.kind==='meta'&&!opts.dogs?metaLine(g,s):''}
       ${opts.actions?goalActions(g):''}</div></div>`;
 }
@@ -837,10 +849,8 @@ function vInicio(){
   const byDue=(a,b)=>(a.due_date||'9')<(b.due_date||'9')?-1:1;
   const fijos=gs.filter(g=>g.kind==='fijo').sort(byDue), deudas=gs.filter(g=>g.kind==='pago').sort(byDue), metas=gs.filter(g=>g.kind==='meta');
   const alerts=activeGoals().map(g=>[g,gst(g)]).filter(([g,s])=>s.stc==='red');
-  const accs=liveAccs().filter(accMine), tH=sum(accs.filter(a=>atype(a)!=='tdc').map(accBal)), tC=sum(accs.filter(a=>atype(a)==='tdc').map(a=>cardInfo(a).debt));
-  const tD=sum(debtGoals().map(g=>Math.max(0,+g.target-gst(g).pagado))), unOk=accs.filter(a=>!accOk(a)).length;
-  const apart=sum(activeGoals().map(g=>Math.max(0,gst(g).saldo)));
-  const last=S.movs.filter(m=>movMine(m)&&m.kind!=='carga').slice(0,4);
+  const W=worth(), apart=W.ap;
+  const last=S.movs.filter(m=>movMine(m)&&m.kind!=='carga'&&!(m.kind==='mueve'&&m.note==='auto')).slice(0,4);
   const empty=!S.movs.length&&!S.goals.length;
   const ls=limitPeople().map(limitOf), hoy=ls.length?sum(ls.map(L=>L.hoy)):Math.max(0,l/dl);
   const L1=ls.length===1?ls[0]:null;
@@ -859,8 +869,7 @@ function vInicio(){
     <div class="mu">${l>0.5?`≈ <b style="color:#fff">${money(l/dl)} por día</b> hasta el ${fmtD(nq)} · ${dl} día${dl>1?'s':''}`:l<-0.5?'⚠️ Apartaste o gastaste más de lo que ingresaste':'Sin dinero libre por ahora'}</div>
     <div class="grid2" style="margin-top:14px;gap:8px">
       ${box('💵 Ingresaste (quincena)',ingresadoQ(q),"S.mf='ingreso';go('movs')",'')}${box('🎯 Apartado',apart,"go('apartados')")}
-      ${box('💳 Debes',tC+tD,"go('cuentas')")}${box('💎 Patrimonio',tH-tC-tD,"go('cuentas')")}</div>
-    ${unOk?`<div class="mu sm" style="margin-top:8px;cursor:pointer" onclick="go('cuentas')">⚖️ ${unOk} cuenta(s) sin cuadrar con el banco ›</div>`:''}</div>
+      ${box('💳 Debes',W.debt,"go('cuentas')")}${box('💎 Patrimonio',W.net,"go('cuentas')")}</div></div>
   <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">🎯<br><small>Apartar</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
   ${alerts.map(([g,s])=>`<div class="alert" onclick="sheetGoal('${g.id}')" style="cursor:pointer">${esc(g.icon||'⚠️')} <span><b>${esc(g.name)}</b>: ${s.st}</span></div>`).join('')}
   ${fijos.length?`<div class="card"><h2>📆 Próximos pagos</h2>${fijos.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
@@ -1328,49 +1337,62 @@ function vConfig(){
   <button class="sec full" onclick="logout()">Cerrar sesión</button>`;
 }
 // ---------- CUENTAS ----------
-function netWorthAt(t){ // patrimonio en una fecha (hacia atrás desde hoy)
-  let v=0; for(const a of liveAccs().filter(accMine)) v+=accBalAt(a,t);
-  for(const g of S.goals.filter(g=>g.kind==='pago'&&!ex(g).card&&g.subtype!=='tdc'&&mine(g)&&+g.target)){
-    if(g.archived) continue; const pag=-sum(S.movs.filter(m=>m.goal_id===g.id&&m.kind==='pago'&&m.date<=t).map(m=>m.amount)); v-=Math.max(0,+g.target-pag); }
+// tarjetas que todavía están como apartado viejo (sin cuenta de tarjeta)
+const isOldCard = g => g.kind==='pago' && !ex(g).card && (g.subtype==='tdc' || /\b(tdc|tarjeta)\b/i.test(g.name||''));
+const oldCardDebt = g => Math.max(0, +ex(g).total || (+g.target||0) - gst(g).pagCiclo);
+function debtGoals(){ return activeGoals().filter(g=>g.kind==='pago'&&!ex(g).card&&!isOldCard(g)&&+g.target); }
+const apartTotal = () => sum(activeGoals().map(g=>gst(g).saldo));
+// patrimonio = lo que tienes (libre + apartados + vales) − lo que debes. Siempre cuadra con la app.
+function worth(){
+  const accs=liveAccs().filter(accMine), vales=sum(accs.filter(a=>atype(a)==='vales').map(accBal)), lib=libre(), ap=apartTotal();
+  const cards=sum(accs.filter(a=>atype(a)==='tdc').map(a=>cardInfo(a).debt))+sum(activeGoals().filter(isOldCard).map(oldCardDebt));
+  const dg=sum(debtGoals().map(g=>Math.max(0,+g.target-gst(g).pagado)));
+  return {lib,ap,vales,have:lib+ap+vales,cards,dg,debt:cards+dg,net:lib+ap+vales-cards-dg};
+}
+function netWorthAt(t){
+  const gids=new Set(S.goals.filter(g=>!g.archived&&mine(g)).map(g=>g.id)), accs=liveAccs().filter(accMine);
+  let v=sum(S.movs.filter(m=>movMine(m)&&m.date<=t).map(libreFx)) + sum(S.movs.filter(m=>m.goal_id&&gids.has(m.goal_id)&&m.date<=t).map(m=>+m.amount));
+  for(const a of accs){ const ty=atype(a); if(ty==='vales'||ty==='tdc') v+=accBalAt(a,t); }
+  for(const g of debtGoals()){ const pag=-sum(S.movs.filter(m=>m.goal_id===g.id&&m.kind==='pago'&&m.date<=t).map(m=>m.amount)); v-=Math.max(0,+g.target-pag); }
   return v;
 }
-function debtGoals(){ return activeGoals().filter(g=>g.kind==='pago'&&!ex(g).card&&g.subtype!=='tdc'&&+g.target); }
 function vCuentas(){
   const accs=liveAccs().filter(accMine), have=accs.filter(a=>atype(a)!=='tdc'), cards=accs.filter(a=>atype(a)==='tdc');
-  const tH=sum(have.map(accBal)), tC=sum(cards.map(a=>cardInfo(a).debt)), dg=debtGoals();
-  const tD=sum(dg.map(g=>{ const s=gst(g); return Math.max(0,+g.target-s.pagado); })), net=tH-tC-tD;
-  const oldTdc=activeGoals().filter(g=>g.subtype==='tdc'&&!ex(g).card);
+  const W=worth(), dg=debtGoals(), tH=W.have, tC=W.cards, tD=W.dg, net=W.net;
+  const oldTdc=activeGoals().filter(isOldCard);
   // patrimonio últimos 6 meses
   const first=S.movs.reduce((m,x)=>x.date<m?x.date:m,todayISO()); const t=todayISO(); let [y,m]=t.split('-').map(Number); m-=5; while(m<1){m+=12;y--;}
   const pts=[]; for(let i=0;i<6;i++){ const e=i===5?t:iso(y,m,new Date(y,m,0).getDate()); if(e>=first.slice(0,8)+'01') pts.push({l:MES[m-1],v:netWorthAt(e)}); m++; if(m>12){m=1;y++;} }
   const mx=Math.max(1,...pts.map(p=>Math.abs(p.v)));
-  const realAll=sum(moneyAccs(false).filter(accMine).map(accBal)), apart=sum(activeGoals().map(g=>gst(g).saldo)), lib=libre(), diff=realAll-(lib+apart);
+  const realAll=sum(moneyAccs(false).filter(accMine).map(accBal)), apart=W.ap, lib=W.lib, diff=realAll-(lib+apart);
   const pend=accs.filter(a=>!accOk(a));
   const accRow=a=>{ const ty=atype(a), b=accBal(a), ap=accSaved(a.name,true);
     if(ty==='tdc'){ const c=cardInfo(a);
       return `<div class="item" onclick="sheetAccView('${a.id}')" style="cursor:pointer"><div class="ic" style="background:${a.color}22;color:${a.color}">💳</div><div class="grow">
         <div class="row"><span class="nm">${esc(a.name)}</span><b class="${c.debt>0.5?'neg':''}">${money(c.debt)}</b></div>
         ${c.lim?`<div class="bar"><i style="width:${Math.min(100,c.use)}%;background:${c.use>=90?'var(--rd)':c.use>=70?'var(--wa)':a.color}"></i></div>`:''}
-        <div class="mu sm" style="margin-top:5px">${c.lim?`Disponible ${money(c.avail)} · `:''}${c.sinInt>0.5?`Sin intereses ${money(c.sinInt)}${c.due?' antes del '+fmtD(c.due):''}`:'Sin pago pendiente'}${a.owner?' · '+esc(a.owner):''}</div>
+        <div class="mu sm" style="margin-top:5px">${c.lim?`Disponible ${money(c.avail)} · `:''}${c.sinInt>0.5?`Sin intereses ${money(c.sinInt)}${c.due?' antes del '+fmtD(c.due)+(c.dueAprox?' (aprox.)':''):''}`:'Sin pago pendiente'}${a.owner?' · '+esc(a.owner):''}</div>
         ${accOk(a)?'':'<span class="st yellow" style="margin-top:5px">Sin cuadrar con el banco</span>'}</div></div>`; }
+    const ok=accOk(a)||ty==='vales';
     return `<div class="item" onclick="sheetAccView('${a.id}')" style="cursor:pointer"><div class="ic" style="background:${a.color}22;color:${a.color}">${ATYPES[ty][0]}</div><div class="grow">
-      <div class="row"><span class="nm">${esc(a.name)}</span><b>${money(b)}</b></div>
-      <div class="mu sm">${ATYPES[ty][1]}${ap>0.5?` · apartado aquí ${money(ap)}`:''}${+a.rate?` · ${+a.rate}% anual`:''}${a.owner?' · '+esc(a.owner):''}</div>
+      <div class="row"><span class="nm">${esc(a.name)}</span><b>${money(ok?b:ap)}</b></div>
+      <div class="mu sm">${ok?`Saldo en el banco${ap>0.5?` · de eso apartado ${money(ap)}`:''}`:`Apartado aquí${ap<=0.5?' (nada)':''}`}${+a.rate?` · ${+a.rate}% anual`:''}${a.owner?' · '+esc(a.owner):''}</div>
       ${+a.tope?`<div class="bar"><i style="width:${Math.min(100,ap/a.tope*100)}%;background:${ap>a.tope?'var(--rd)':a.color}"></i></div><div class="mu sm" style="margin-top:3px">Tope de apartados ${money(a.tope)} · ${ap>=a.tope?'lleno':'caben '+money(a.tope-ap)}</div>`:''}
-      ${accOk(a)?'':'<span class="st yellow" style="margin-top:5px">Toca para poner tu saldo real</span>'}</div></div>`; };
+      ${ok?'':'<span class="st yellow" style="margin-top:5px">Toca para poner el saldo de tu banco</span>'}</div></div>`; };
   return `<button class="gh mini" style="padding-left:0" onclick="go('mas')">‹ Más</button><div class="row"><h1>🏦 Cuentas</h1><button class="mini" onclick="sheetAcc('new')">＋ Cuenta</button></div>
   ${whoBar()}
   <div class="hero" style="background:linear-gradient(135deg,#0f766e,#0891b2 60%,#4f46e5)"><div class="mu">💎 Patrimonio neto</div><div class="big">${money(net)}</div>
     <div class="row" style="margin-top:10px;gap:8px"><div class="pill"><span class="mu sm">Tienes</span><b>${money(tH)}</b></div><div class="pill"><span class="mu sm">Debes</span><b>${money(tC+tD)}</b></div></div>
     ${pts.length>1?`<div class="nwbars">${pts.map(p=>`<div><small>${money(p.v).replace('$','')}</small><i style="height:${Math.max(3,Math.abs(p.v)/mx*60)}px;background:${p.v<0?'#fca5a5':'rgba(255,255,255,.85)'}"></i><span style="color:rgba(255,255,255,.8)">${p.l}</span></div>`).join('')}</div>`:''}</div>
-  ${pend.length?`<div class="alert y">⚖️ <span>${pend.length===1?'1 cuenta':pend.length+' cuentas'} sin cuadrar. Toca cada una y pon el saldo que dice tu banco; desde ahí la app lo lleva sola.</span></div>`:''}
-  ${oldTdc.length?`<div class="alert y" style="cursor:pointer" onclick="linkCard('${oldTdc[0].id}')">💳 <span>Tienes ${oldTdc.length} tarjeta(s) como apartado (${oldTdc.map(g=>esc(g.name)).join(', ')}). Toca para convertirla en tarjeta.</span></div>`:''}
+
   <div class="sect row"><span>💰 Lo que tienes</span><span>${money(tH)}</span></div>
-  <div class="card">${have.length?have.map(accRow).join(''):'<p class="mu">Sin cuentas</p>'}</div>
+  <div class="card"><div class="row sm"><span>💸 Saldo libre</span><b>${money(W.lib)}</b></div><div class="row sm"><span>🎯 En apartados</span><b>${money(W.ap)}</b></div>${W.vales?`<div class="row sm"><span>🎟️ Vales</span><b>${money(W.vales)}</b></div>`:''}
+    <div class="sect" style="margin:14px 0 4px">Dónde está</div>${have.length?have.map(accRow).join(''):'<p class="mu">Sin cuentas</p>'}</div>
   <div class="sect row"><span>💳 Lo que debes</span><span>${money(tC+tD)}</span></div>
   <div class="card">${cards.map(accRow).join('')}
+    ${oldTdc.map(g=>`<div class="item" onclick="linkCard('${g.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">💳</div><div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><b class="neg">${money(oldCardDebt(g))}</b></div><div class="mu sm">${g.owner?esc(g.owner)+' · ':''}<a href="#" onclick="event.preventDefault()">Convertir en tarjeta</a> para que la deuda suba sola con tus gastos</div></div></div>`).join('')}
     ${dg.map(g=>{ const s=gst(g), rest=Math.max(0,+g.target-s.pagado); return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">${esc(g.icon||'🤝')}</div><div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><b class="neg">${money(rest)}</b></div><div class="mu sm">${g.subtype==='prestamo'?'Crédito':'Deuda'} · pagado ${money(s.pagado)} de ${money(g.target)}${s.saldo>0.5?' · apartado '+money(s.saldo):''}</div></div></div>`; }).join('')}
-    ${!cards.length&&!dg.length?'<p class="mu">No debes nada 🎉</p>':''}
+    ${!cards.length&&!dg.length&&!oldTdc.length?'<p class="mu">No debes nada 🎉</p>':''}
     <button class="sec mini" style="margin-top:10px" onclick="sheetAcc('new','tdc')">＋ Tarjeta de crédito</button></div>
   ${S.who==='Todos'&&!pend.filter(a=>atype(a)!=='tdc'&&atype(a)!=='vales').length&&Math.abs(diff)>1?`<div class="card"><h2>🔍 ¿Cuadra todo?</h2>
     <div class="row sm"><span>En tus cuentas (sin vales)</span><b>${money(realAll)}</b></div><div class="row sm"><span>Libre ${money(lib)} + apartados ${money(apart)}</span><b>${money(lib+apart)}</b></div>
@@ -1385,9 +1407,9 @@ function sheetAccView(id){
   const a=S.accounts.find(x=>x.id===id); if(!a) return; const ty=atype(a), tdc=ty==='tdc', b=accBal(a), c=tdc?cardInfo(a):null;
   const ms=S.movs.filter(m=>m.account===a.name&&REAL.has(m.kind)||tdc&&m.kind==='pago'&&cardGoals(a.name).some(g=>g.id===m.goal_id)).slice(0,25);
   openSheet(`<div style="text-align:center"><div style="font-size:40px">${tdc?'💳':ATYPES[ty][0]}</div><h1 style="margin-bottom:0">${esc(a.name)}</h1>
-    <div class="mu">${tdc?'Debes':'Saldo'}</div><div style="font-size:34px;font-weight:800" class="${tdc&&c.debt>0.5?'neg':''}">${money(tdc?c.debt:b)}</div></div>
+    <div class="mu">${tdc?'Debes':accOk(a)||ty==='vales'?'Saldo en el banco':'Apartado aquí'}</div><div style="font-size:34px;font-weight:800" class="${tdc&&c.debt>0.5?'neg':''}">${money(tdc?c.debt:accOk(a)||ty==='vales'?b:accSaved(a.name,true))}</div>${!tdc&&accOk(a)&&accSaved(a.name,true)>0.5?`<div class="mu sm">de eso, apartado ${money(accSaved(a.name,true))}</div>`:''}</div>
   ${tdc?`<div class="tri"><span>Límite<b>${c.lim?money(c.lim):'—'}</b></span><span>Disponible<b>${c.lim?money(c.avail):'—'}</b></span><span>Al corte${c.corte?' '+fmtD(c.corte):''}<b>${money(c.stmt)}</b>${c.auto&&c.corte?'calculado':''}</span></div>
-    <div class="ins" style="background:var(--prl);color:var(--pr);margin-top:10px">${c.sinInt>0.5?`<b>Paga ${money(c.sinInt)}${c.due?' antes del '+fmtD(c.due):''}</b> para no generar intereses.${c.paid>0.5?` Ya abonaste ${money(c.paid)}.`:''}`:'<b>No tienes pago pendiente</b> de este corte.'}${!a.corte_day?' Pon tus días de corte y pago en Editar.':''}</div>`:''}
+    <div class="ins" style="background:var(--prl);color:var(--pr);margin-top:10px">${c.sinInt>0.5?`<b>Paga ${money(c.sinInt)}${c.due?' antes del '+fmtD(c.due)+(c.dueAprox?' (aprox.)':''):''}</b> para no generar intereses.${c.paid>0.5?` Ya abonaste ${money(c.paid)}.`:''}`:'<b>No tienes pago pendiente</b> de este corte.'}${!a.corte_day?' Pon tus días de corte y pago en Editar.':''}</div>`:''}
   <div class="card" style="background:var(--bg);box-shadow:none;margin-top:10px"><h2 style="margin-bottom:6px">⚖️ Cuadrar con el banco</h2>
     <p class="mu sm" style="margin-top:0">${tdc?'Pon lo que debes hoy según tu app del banco.':'Pon el saldo que dice tu banco hoy.'} La diferencia se registra como cuadre (no cuenta como gasto ni ingreso).</p>
     <div class="row"><input id="cc_v" type="number" inputmode="decimal" placeholder="${Math.round(tdc?c.debt:b)}"><button class="mini" onclick="concilia('${a.id}')">Cuadrar</button></div>
@@ -1410,11 +1432,12 @@ function ensureCardGoal(a){ // cada tarjeta tiene su apartado "pago de tarjeta"
   return {g:row,op:{table:'goals',action:'insert',row}};
 }
 function nextDay(d){ const t=todayISO(), [y,m]=t.split('-').map(Number); let x=dayIn(y,m,d); if(x<t) x=dayIn(m===12?y+1:y,m===12?1:m+1,d); return x; }
-function cardPreview(){ const cd=parseInt($('#a_cd')?.value), pd=parseInt($('#a_pd')?.value), el=$('#a_prev'); if(!el) return;
-  if(!(cd>=1&&cd<=31)){ el.textContent='Pon tu día de corte y de pago (vienen en tu estado de cuenta).'; return; }
-  const nc=nextDay(cd); let tx=`📅 Próximo corte: ${DOW[toDate(nc).getDay()]} ${fmtD(nc)}`;
-  if(pd>=1&&pd<=31){ const np=nextDay(pd); tx+=` · 💰 Pagar antes de: ${DOW[toDate(np).getDay()]} ${fmtD(np)}`; }
-  el.textContent=tx; }
+function dueFor(corte,cd,pd){ const [cy,cm]=corte.split('-').map(Number); return pd?(pd>cd?dayIn(cy,cm,pd):dayIn(cm===12?cy+1:cy,cm===12?1:cm+1,pd)):addDays(corte,20); }
+function cardPreview(){ const cd=parseInt($('#a_cd')?.value), pd=parseInt($('#a_pd')?.value)||0, el=$('#a_prev'); if(!el) return;
+  if(!(cd>=1&&cd<=31)){ el.textContent='Pon tu día de corte: es el "fin del periodo" de tu estado de cuenta.'; return; }
+  const t=todayISO(), [y,m]=t.split('-').map(Number); let last=dayIn(y,m,cd); if(last>t) last=dayIn(m===1?y-1:y,m===1?12:m-1,cd);
+  let due=dueFor(last,cd,pd), c2=last; if(due<t){ const [ly,lm]=last.split('-').map(Number); c2=dayIn(lm===12?ly+1:ly,lm===12?1:lm+1,cd); due=dueFor(c2,cd,pd); }
+  el.innerHTML=`📅 Corte: ${DOW[toDate(c2).getDay()]} ${fmtD(c2)} · 💰 Pagar antes de: <b>${DOW[toDate(due).getDay()]} ${fmtD(due)}</b>${pd?'':' (aprox., 20 días después del corte)'}`; }
 function sheetAcc(id,preType){
   const a=id==='new'?{color:COLORS[S.accounts.length%COLORS.length],type:preType||'debito',owner:S.who!=='Todos'&&S.who!=='Compartido'?S.who:null}:S.accounts.find(x=>x.id===id);
   window._col=a.color; window._aty=atype(a); const tdc=window._aty==='tdc';
@@ -1427,7 +1450,8 @@ function sheetAcc(id,preType){
   ${tdc?`<div class="card" style="background:var(--rdl);box-shadow:none;padding:14px;margin:14px 0 0">
       <label style="margin-top:0;color:#991b1b">💳 ¿Cuánto debes hoy en total?</label><input id="a_ini" class="amt" style="background:#fff;color:#b91c1c;font-size:28px" type="number" inputmode="decimal" value="${cur}" placeholder="$0">
       <p class="sm" style="color:#991b1b;margin:8px 0 0">Desde aquí, cada gasto con esta tarjeta suma a la deuda y cada pago la baja. Solo vuelves a tocar este número si no cuadra con tu banco.</p></div>
-    <div class="grid2"><div><label>Día de corte</label><input id="a_cd" type="number" inputmode="numeric" min="1" max="31" value="${a.corte_day??''}" placeholder="Ej. 5" oninput="cardPreview()"></div><div><label>Día límite de pago</label><input id="a_pd" type="number" inputmode="numeric" min="1" max="31" value="${a.pago_day??''}" placeholder="Ej. 25" oninput="cardPreview()"></div></div>
+    <div class="grid2"><div><label>Día de corte</label><input id="a_cd" type="number" inputmode="numeric" min="1" max="31" value="${a.corte_day??''}" placeholder="Ej. 11" oninput="cardPreview()"></div><div><label>Día de pago (opcional)</label><input id="a_pd" type="number" inputmode="numeric" min="1" max="31" value="${a.pago_day??''}" placeholder="Si no sabes, vacío" oninput="cardPreview()"></div></div>
+    <p class="mu sm" style="margin:6px 0 0">El día de corte es el "fin del periodo" de tu app del banco (ej. periodo 10 oct – 11 nov → corte día 11). Si no viene el día de pago, la app calcula 20 días después del corte, que es lo normal en México.</p>
     <div class="ins" id="a_prev" style="background:var(--prl);color:var(--pr);margin:10px 0 0"></div>
     <div class="grid2"><div><label>Límite de crédito</label><input id="a_lim" type="number" inputmode="decimal" value="${a.limite??''}" placeholder="Opcional"></div><div><label>Saldo de tu último corte</label><input id="a_cb" type="number" inputmode="decimal" value="${a.corte_bal??''}" placeholder="Opcional"></div></div>
     <p class="mu sm" style="margin:6px 0 0">El saldo al corte es lo que pagas para no generar intereses. Si no lo pones, la app lo calcula con tus gastos.</p>`
@@ -1446,7 +1470,7 @@ function saveAcc(id){
   if(tdc){ const cb=$('#a_cb').value; row.corte_bal=cb===''?null:num(cb);
     if(cb!==''&&row.corte_day){ const t=todayISO(), [y,m]=t.split('-').map(Number); let c=dayIn(y,m,row.corte_day); if(c>t) c=dayIn(m===1?y-1:y,m===1?12:m-1,row.corte_day); row.corte_date=c; } }
   if(tdc&&!row.corte_day) return toast('Pon tu día de corte');
-  if(tdc&&!row.pago_day) return toast('Pon tu día límite de pago');
+
   if(!row.name) return toast('Ponle nombre');
   if(S.accounts.some(x=>x.name===row.name&&x.id!==id)) return toast('Ya hay una cuenta con ese nombre');
   if(id==='new'){ row.id=uuid(); row.sort=S.accounts.length; const ops=[{table:'accounts',action:'insert',row}];
