@@ -1366,7 +1366,7 @@ function vCuentas(){
   const mx=Math.max(1,...pts.map(p=>Math.abs(p.v)));
   const realAll=sum(moneyAccs(false).filter(accMine).map(accBal)), apart=W.ap, lib=W.lib, diff=realAll-(lib+apart);
   const pend=accs.filter(a=>!accOk(a));
-  const accRow=a=>{ const ty=atype(a), b=accBal(a), ap=accSaved(a.name,true);
+  const accRow=a=>{ const ty=atype(a), b=accBal(a), ap=accSaved(a.name);
     if(ty==='tdc'){ const c=cardInfo(a);
       return `<div class="item" onclick="sheetAccView('${a.id}')" style="cursor:pointer"><div class="ic" style="background:${a.color}22;color:${a.color}">💳</div><div class="grow">
         <div class="row"><span class="nm">${esc(a.name)}</span><b class="${c.debt>0.5?'neg':''}">${money(c.debt)}</b></div>
@@ -1407,7 +1407,7 @@ function sheetAccView(id){
   const a=S.accounts.find(x=>x.id===id); if(!a) return; const ty=atype(a), tdc=ty==='tdc', b=accBal(a), c=tdc?cardInfo(a):null;
   const ms=S.movs.filter(m=>m.account===a.name&&REAL.has(m.kind)||tdc&&m.kind==='pago'&&cardGoals(a.name).some(g=>g.id===m.goal_id)).slice(0,25);
   openSheet(`<div style="text-align:center"><div style="font-size:40px">${tdc?'💳':ATYPES[ty][0]}</div><h1 style="margin-bottom:0">${esc(a.name)}</h1>
-    <div class="mu">${tdc?'Debes':accOk(a)||ty==='vales'?'Saldo en el banco':'Apartado aquí'}</div><div style="font-size:34px;font-weight:800" class="${tdc&&c.debt>0.5?'neg':''}">${money(tdc?c.debt:accOk(a)||ty==='vales'?b:accSaved(a.name,true))}</div>${!tdc&&accOk(a)&&accSaved(a.name,true)>0.5?`<div class="mu sm">de eso, apartado ${money(accSaved(a.name,true))}</div>`:''}</div>
+    <div class="mu">${tdc?'Debes':accOk(a)||ty==='vales'?'Saldo en el banco':'Apartado aquí'}</div><div style="font-size:34px;font-weight:800" class="${tdc&&c.debt>0.5?'neg':''}">${money(tdc?c.debt:accOk(a)||ty==='vales'?b:accSaved(a.name))}</div>${!tdc&&accOk(a)&&accSaved(a.name,true)>0.5?`<div class="mu sm">de eso, apartado ${money(accSaved(a.name,true))}</div>`:''}</div>
   ${tdc?`<div class="tri"><span>Límite<b>${c.lim?money(c.lim):'—'}</b></span><span>Disponible<b>${c.lim?money(c.avail):'—'}</b></span><span>Al corte${c.corte?' '+fmtD(c.corte):''}<b>${money(c.stmt)}</b>${c.auto&&c.corte?'calculado':''}</span></div>
     <div class="ins" style="background:var(--prl);color:var(--pr);margin-top:10px">${c.sinInt>0.5?`<b>Paga ${money(c.sinInt)}${c.due?' antes del '+fmtD(c.due)+(c.dueAprox?' (aprox.)':''):''}</b> para no generar intereses.${c.paid>0.5?` Ya abonaste ${money(c.paid)}.`:''}`:'<b>No tienes pago pendiente</b> de este corte.'}${!a.corte_day?' Pon tus días de corte y pago en Editar.':''}</div>`:''}
   <div class="card" style="background:var(--bg);box-shadow:none;margin-top:10px"><h2 style="margin-bottom:6px">⚖️ Cuadrar con el banco</h2>
@@ -1416,7 +1416,16 @@ function sheetAccView(id){
     ${tdc?`<div class="grid2"><div><label>Saldo al corte (estado de cuenta)</label><input id="cc_cb" type="number" inputmode="decimal" value="${a.corte_bal??''}"></div><div><label>Fecha de ese corte</label><input id="cc_cd" type="date" value="${a.corte_date||c.corte||''}"></div></div>
       <button class="sec mini" style="margin-top:8px" onclick="saveCorte('${a.id}')">Guardar estado de cuenta</button>`:''}</div>
   <div class="grid2"><button class="sec" onclick="sheetAcc('${a.id}')">✏️ Editar</button>${tdc?`<button class="ok" onclick="payCard('${a.id}')">💳 Pagar</button>`:`<button class="sec" onclick="sheetMover('${esc(a.name)}')">🔀 Mover</button>`}</div>
-  <div class="sect">Movimientos</div>${ms.length?ms.map(movRow).join(''):'<p class="mu">Sin movimientos</p>'}`);
+  ${tdc?'':accContents(a)}
+  <details style="margin-top:14px"><summary class="mu" style="cursor:pointer;font-weight:600">Ver movimientos de esta cuenta</summary>${ms.length?ms.map(movRow).join(''):'<p class="mu">Sin movimientos</p>'}</details>`);
+}
+function accContents(a){ // qué dinero hay en esta cuenta: cada apartado y lo libre
+  const rows=[]; for(const g of activeGoals()){ const v=sum(S.movs.filter(m=>m.goal_id===g.id&&m.account===a.name).map(m=>+m.amount)); if(Math.abs(v)>0.5) rows.push([g,v]); }
+  rows.sort((x,y)=>y[1]-x[1]); const ap=sum(rows.map(r=>r[1])), ok=accOk(a)||atype(a)==='vales', b=accBal(a), lib=b-ap;
+  return `<div class="sect row"><span>💰 Qué hay aquí</span><span>${money(ok?b:ap)}</span></div>
+  ${rows.map(([g,v])=>`<div class="row" style="padding:9px 0;border-top:1px solid var(--ln);cursor:pointer" onclick="sheetGoal('${g.id}')"><span>${esc(g.icon||'🎯')} ${esc(g.name)}</span><b>${money(v)}</b></div>`).join('')||'<p class="mu">No tienes apartados en esta cuenta.</p>'}
+  ${ok?`<div class="row" style="padding:9px 0;border-top:1px solid var(--ln)"><span>💸 Libre (sin apartar)</span><b class="${lib<-0.5?'neg':''}">${money(lib)}</b></div>`
+    :`<p class="mu sm" style="margin-top:8px">Para ver también tu dinero libre en esta cuenta, pon arriba el saldo que dice tu banco.</p>`}`;
 }
 function concilia(id){ const a=S.accounts.find(x=>x.id===id), raw=$('#cc_v').value; if(raw==='') return toast('Escribe el saldo');
   const v=num(raw), target=atype(a)==='tdc'?-Math.abs(v):v, d=target-accBal(a);
