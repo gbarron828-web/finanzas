@@ -1105,9 +1105,7 @@ function vApartados(){
   const P=list=>sum(list.map(g=>perQuin(g,gst(g))));
   const faltaTot=sum(activeGoals().map(g=>faltaQ(g)));
   const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span style="text-align:right;line-height:1.25">${list.length?`<span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(sum(list.map(g=>gst(g).saldo)))}</b></span><br><span style="font-size:11px">${money(P(list))} por quincena</span>`:''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
-  return `<div class="card" style="background:linear-gradient(135deg,#eef2ff,#f5f3ff)"><div class="row"><span class="b">🎯 Te falta apartar esta quincena</span><b style="font-size:20px">${money(faltaTot)}</b></div>
-    <div class="mu sm">Lo que te toca meter a cada apartado esta quincena, sumado.</div>
-    ${faltaTot>0.5?`<button class="full" style="margin-top:10px" onclick="apartarTodo()">Apartar todo lo que falta · ${money(faltaTot)}</button>`:'<p class="mu" style="margin:8px 0 0">✓ Ya apartaste todo lo de esta quincena</p>'}</div>
+  return `
   ${sec('📆 Gastos fijos',fijos)}
   ${sec('🤝 Deudas',deudas)}
   ${sec('🎯 Metas',metas)}
@@ -1521,7 +1519,7 @@ function finHeader(){
   const q=currentQ(), nq=shiftQ(q,1), f=S.fin||'quincena';
   return `<div class="hello"><img src="icon.png" alt=""><div><h1 style="margin:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div>
   ${whoBar()}
-  <div class="seg">${[['quincena','🧮 Quincena'],['apartados','🎯 Apartados'],['tarjetas','💳 Tarjetas'],['analisis','📊 Análisis']].map(([k,t])=>`<button class="${f===k?'on':''}" onclick="S.tab='finanzas';S.fin='${k}';render();scrollTo(0,0)">${t}</button>`).join('')}</div>`;
+  <div class="seg">${[['quincena','Quincena'],['apartados','Apartados'],['tarjetas','Tarjetas'],['analisis','Análisis']].map(([k,t])=>`<button class="${f===k?'on':''}" onclick="S.tab='finanzas';S.fin='${k}';render();scrollTo(0,0)">${t}</button>`).join('')}</div>`;
 }
 function vFinanzas(){ const f=S.fin||'quincena'; return finHeader()+(f==='apartados'?vApartados():f==='tarjetas'?vTarjetas():f==='analisis'?vAnalisis2().replace(/^<h1>[^<]*<\/h1>/,'').replace(whoBar(),''):vQuincena()); }
 function quinData(){
@@ -1544,7 +1542,7 @@ function vQuincena(){
   <div class="hero"><div class="mu">💸 Te queda libre esta quincena</div>
     <div class="big">${money(libreP)}</div>
     <div class="formula">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}</div>
-    ${D.faltaTot>0.5?`<div class="pill" onclick="S.fin='apartados';render()" style="cursor:pointer;margin-top:10px;display:flex;justify-content:space-between;align-items:center"><span class="sm">🎯 Te falta apartar esta quincena</span><b>${money(D.faltaTot)} ›</b></div>`:`<div class="pill" style="margin-top:10px"><span class="sm">✓ Ya apartaste todo lo de esta quincena</span></div>`}</div>
+  </div>
   ${incomeMini()}
   ${libreP<-0.5?`<div class="alert">⚠️ <span>Tus apartados piden ${money(-libreP)} más de lo que te entra. Baja alguna cuota o agrega un ingreso.</span></div>`:''}
   <div class="tiles">
