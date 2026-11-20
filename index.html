@@ -466,8 +466,8 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) { flush(
 function render(){
   if(!S.hh) return;
   $('#nav').hidden=false;
-  const navT={anaquel:'mas',config:'mas',cuentas:'mas',movs:'mas',repartir:'inicio'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
-  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({inicio:vInicio,repartir:vRepartir,apartados:vApartados,analisis:vAnalisis,config:vConfig,anaquel:vAnaquel,mas:vMas,cuentas:vCuentas,movs:vMovs}[S.tab]||vInicio)();
+  const navT={anaquel:'mas',config:'mas',cuentas:'mas',movs:'mas',repartir:'inicio',revision:'inicio'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
+  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({inicio:vInicio,repartir:vRepartir,apartados:vApartados,analisis:vAnalisis,config:vConfig,anaquel:vAnaquel,mas:vMas,cuentas:vCuentas,movs:vMovs,revision:vRevision}[S.tab]||vInicio)();
   renderNet(); const n=S.pantry.filter(p=>pst(p).c!=='green').length, bd=$('#anqBadge'); if(bd){ bd.hidden=!n; bd.textContent=n; }
 }
 function go(t){ S.tab=t; render(); scrollTo(0,0); }
@@ -630,7 +630,6 @@ function sheetGasto(){
   openSheet(`<h1 style="text-align:center">💸 Nuevo gasto</h1>
   <input id="g_amt" class="amt" style="background:var(--rdl);color:#b91c1c" type="number" inputmode="decimal" placeholder="$0">
   <label>¿En qué?</label><div class="pick" id="g_cats">${(S.hh.categories||[]).map(c=>`<button class="${c===G.cat?'on':''}" onclick="G.cat='${esc(c)}';pickOn('g_cats',this)"><span>${catIc(c)}</span>${esc(c)}</button>`).join('')}</div>
-  <label>¿De dónde sale?</label><div class="chips" id="g_src" style="flex-wrap:wrap"><button class="chip on" onclick="G.src='';pickOn('g_src',this)">💸 Dinero libre · ${money(libre())}</button>${srcs.map(g=>`<button class="chip" onclick="G.src='${g.id}';pickOn('g_src',this)">${esc(g.icon||'🎯')} ${esc(g.name)} · ${money(gst(g).saldo)}</button>`).join('')}</div>
   <label>¿Cómo pagaste?</label><div class="chips" id="g_accs" style="flex-wrap:wrap">${pa.map(a=>`<button class="chip ${a.name===G.acc?'on':''}" onclick="G.acc='${esc(a.name)}';pickOn('g_accs',this);$('#g_hint').innerHTML=gastoHint()">${ATYPES[atype(a)][0]} ${esc(a.name)}</button>`).join('')}</div>
   <p class="mu sm" id="g_hint" style="margin:6px 0 0">${gastoHint()}</p>
   <div class="grid2"><div><label>Nota</label><input id="g_note" placeholder="Ej. cine"></div><div><label>Fecha</label><input id="g_date" type="date" value="${todayISO()}"></div></div>
@@ -833,7 +832,7 @@ function limitOf(p){ const L=(S.hh.limits||{})[p]; if(!L||!+L.amt) return null;
   const d7=Math.min(7,days), avg7=-sum(S.movs.filter(m=>own(m)&&m.date>=addDays(t,-(d7-1))&&m.date<=t).map(m=>m.amount))/d7;
   return {p,amt,from,days,spent,bolsa,hoy,acum,avg7,d7,lib,spentToday,capped:bolsa>lib+0.5};
 }
-const limitPeople = () => (S.who==='Todos'?people():[S.who]).filter(p=>limitOf(p));
+const limitPeople = () => [];   // el límite diario se quitó (v17)
 function todayCard(){
   const ls=limitPeople().map(limitOf); if(!ls.length) return '';
   return `<div class="card today">${ls.map((L,i)=>{ const pctUsed=L.bolsa+L.spentToday>0?Math.min(100,L.spentToday/(L.bolsa+L.spentToday)*100):100;
@@ -859,24 +858,91 @@ function vInicio(){
               : `Límite ${money(L1.amt)}/día${L1.acum>0.5?` · traes ${money(L1.acum)} acumulado`:L1.acum<-0.5?` · se descuentan ${money(-L1.acum)}`:''}${L1.spentToday>0.5?` · hoy llevas ${money(L1.spentToday)}`:''}`)
          : ls.map(L=>`${esc(L.p)} ${money(L.hoy)}`).join(' · '))
     : (l>0.5?`Tu libre repartido en ${dl} día${dl>1?'s':''} hasta el ${fmtD(nq)}`:l<-0.5?'Gastaste o apartaste más de lo que ingresaste':'Sin dinero libre por ahora');
+  const rq=ingresadoQ(q)>0.5?q:shiftQ(q,-1);   // si aún no te pagan esta quincena, muestra la anterior (la nómina a veces cae antes del 15/30)
+  const ingQ=ingresadoQ(rq), apQ=apartadoQ(rq)+sumKind('retira',rq), gaQ=gastadoQ(rq), dsr=daysSinceRev();
+  const incs=Object.entries(S.movs.filter(m=>movMine(m)&&m.kind==='ingreso'&&inQ(m,rq)&&!isVales(m.account)).reduce((o,m)=>{ const k=m.category||'Sin concepto'; o[k]=(o[k]||0)+(+m.amount); return o; },{})).sort((a,b)=>b[1]-a[1]);
   const box=(lb,v,go,cls='')=>`<div class="pill" onclick="${go}" style="cursor:pointer"><span class="mu sm">${lb}</span><b class="${cls}">${money(v)}</b></div>`;
   return `<div class="row"><div class="row" style="gap:10px;justify-content:flex-start"><img src="icon.png" alt="" style="width:46px;height:46px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.12)"><div><h1 style="margin-bottom:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div></div>
   <div style="height:12px"></div>${whoBar()}
   ${empty?`<div class="card empty"><span>🚀</span><b>Empecemos</b><br>1. Ingresa el dinero que tienes hoy<br>2. Crea tus apartados<br>3. Reparte, y lo que quede es tu saldo libre
     <div class="grid2" style="margin-top:14px"><button class="ok" onclick="sheetIngreso()">💵 Ingresar</button><button onclick="go('apartados');setTimeout(()=>sheetEdit('new'),60)">🎯 Crear apartado</button></div></div>`:''}
-  <div class="hero"><div class="mu">💸 Tu saldo · lo que no está apartado</div>
+  <div class="hero"><div class="mu">💸 Tu libre${rq===q?' de la quincena':''}</div>
     <div class="big">${money(l)}</div>
-    <div class="mu">${l>0.5?`≈ <b style="color:#fff">${money(l/dl)} por día</b> hasta el ${fmtD(nq)} · ${dl} día${dl>1?'s':''}`:l<-0.5?'⚠️ Apartaste o gastaste más de lo que ingresaste':'Sin dinero libre por ahora'}</div>
-    <div class="grid2" style="margin-top:14px;gap:8px">
-      ${box('💵 Ingresaste (quincena)',ingresadoQ(q),"S.mf='ingreso';go('movs')",'')}${box('🎯 Apartado',apart,"go('apartados')")}
-      ${box('💳 Debes',W.debt,"go('cuentas')")}${box('💎 Patrimonio',W.net,"go('cuentas')")}</div></div>
-  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">🎯<br><small>Apartar</small></button><button style="background:var(--rd)" onclick="sheetGasto()">💸<br><small>Gasto</small></button></div>
+    <div class="mu">${l<-0.5?'⚠️ Apartaste o gastaste más de lo que te entró':`${rq===q?'Te entró':'Quincena pasada te entró'} ${money(ingQ)} · apartaste ${money(apQ)}${gaQ>0.5?` · gastaste ${money(gaQ)}`:''}`}</div>
+    ${incs.length?`<div style="margin-top:12px;background:rgba(255,255,255,.14);border-radius:14px;padding:10px 12px">${incs.map(([c,v])=>`<div class="row sm" style="padding:2px 0"><span>💵 ${esc(c)}</span><b>${money(v)}</b></div>`).join('')}
+      <div class="row sm" style="border-top:1px solid rgba(255,255,255,.3);margin-top:4px;padding-top:4px"><span>Total que te entró</span><b>${money(ingQ)}</b></div></div>`:''}
+    <div class="grid3" style="margin-top:10px;gap:8px">
+      ${box('🎯 Apartado',apart,"go('apartados')")}${box('💳 Debes',W.debt,"go('apartados')")}${box('💎 Patrimonio',W.net,"go('cuentas')")}</div></div>
+  <div class="grid3" style="margin-bottom:12px"><button class="ok" onclick="sheetIngreso()">💵<br><small>Ingresar</small></button><button onclick="go('repartir')">🎯<br><small>Apartar</small></button><button style="background:#0891b2" onclick="go('revision')">📝<br><small>Revisión</small></button></div>
+  ${dsr===null||dsr>=7?`<div class="alert y" style="cursor:pointer" onclick="go('revision')">📝 <span>${dsr===null?'Haz tu primera <b>revisión</b>: pon cuánto tienes en cada cuenta y la app lleva tus gastos sola.':`Hace ${dsr} días que no haces tu <b>revisión de la semana</b>. Son 2 minutos.`}</span></div>`:''}
   ${alerts.map(([g,s])=>`<div class="alert" onclick="sheetGoal('${g.id}')" style="cursor:pointer">${esc(g.icon||'⚠️')} <span><b>${esc(g.name)}</b>: ${s.st}</span></div>`).join('')}
   ${fijos.length?`<div class="card"><h2>📆 Próximos pagos</h2>${fijos.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${deudas.length?`<div class="card"><h2>🤝 Deudas</h2>${deudas.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${metas.length?`<div class="card"><h2>🎯 Metas</h2>${metas.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}
   ${last.length?`<div class="card"><div class="row"><h2 style="margin:0">🧾 Últimos movimientos</h2><button class="gh mini" onclick="go('movs')">Ver todo 🔎</button></div>${last.map(movRow).join('')}</div>`:''}`;
 }
+
+// ---------- REVISIÓN DE LA SEMANA (como tu Excel: actualizas saldos y palomeas pagos) ----------
+const lastRev = () => S.movs.filter(m=>m.note==='Revisión'&&movMine(m)).reduce((d,m)=>m.date>d?m.date:d,'');
+const daysSinceRev = () => { const d=lastRev(); return d?daysBetween(d,todayISO()):null; };
+function payList(){ // lo que se puede palomear como pagado
+  return activeGoals().filter(g=>g.kind!=='meta').map(g=>{ const s=gst(g);
+    const amt=s.card?s.tgt:isCyc(g)?Math.max(0,(+g.target||0)-s.pagCiclo):(+g.cuota||s.cuota||0);
+    return {g,s,amt:Math.round(amt*100)/100}; }).filter(x=>x.amt>0.5&&(!x.s.due||daysBetween(todayISO(),x.s.due)<=25)).sort((a,b)=>(a.s.due||'9')<(b.s.due||'9')?-1:1);
+}
+function vRevision(){
+  const accs=moneyAccs(true).filter(accMine), cards=liveAccs().filter(a=>atype(a)==='tdc'&&accMine(a)), pays=payList(), lr=lastRev();
+  const accIn=a=>{ const ok=accOk(a), b=accBal(a);
+    return `<div class="row" style="padding:10px 0;border-top:1px solid var(--ln)"><span><b>${ATYPES[atype(a)][0]} ${esc(a.name)}</b>${ok?`<br><span class="mu sm">la vez pasada: ${money(b)}</span>`:'<br><span class="mu sm">primera vez</span>'}</span>
+      <input id="rv_${a.id}" type="number" inputmode="decimal" placeholder="${ok?Math.round(b):'$ hoy'}" style="max-width:140px;text-align:right;padding:9px 11px"></div>`; };
+  const cardIn=a=>{ const c=cardInfo(a);
+    return `<div style="padding:10px 0;border-top:1px solid var(--ln)"><div class="row"><span><b>💳 ${esc(a.name)}</b><br><span class="mu sm">${c.lim?`límite ${money(c.lim)} · `:''}${c.due?'paga '+fmtD(c.due)+(c.dueAprox?' aprox.':''):'sin fechas'}</span></span>
+      <input id="rv_${a.id}" type="number" inputmode="decimal" placeholder="debes ${Math.round(c.debt)}" style="max-width:140px;text-align:right;padding:9px 11px"></div></div>`; };
+  return `<button class="gh mini" style="padding-left:0" onclick="go('inicio')">‹ Inicio</button><h1>📝 Revisión de la semana</h1>
+  <p class="mu" style="margin-top:-6px">${lr?`Última revisión: ${fmtD(lr)} (hace ${daysBetween(lr,todayISO())} días)`:'Primera revisión: lo que pongas hoy queda como punto de partida.'}</p>
+  <div class="card"><h2>1 · ¿Cuánto tienes hoy?</h2><p class="mu sm" style="margin-top:-4px">Lo que dice tu app del banco. Deja vacío lo que no quieras actualizar.</p>${accs.map(accIn).join('')}</div>
+  ${cards.length?`<div class="card"><h2>2 · ¿Cuánto debes en tus tarjetas?</h2>${cards.map(cardIn).join('')}</div>`:''}
+  <div class="card"><h2>${cards.length?3:2} · ¿Qué ya pagaste?</h2>${pays.length?pays.map(({g,s,amt})=>`<label class="row" style="padding:10px 0;border-top:1px solid var(--ln);margin:0;color:var(--tx);cursor:pointer">
+      <span style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="rp_${g.id}" style="width:22px;height:22px;flex:none"><span>${esc(g.icon||'🎯')} ${esc(g.name)}${s.due?`<br><span class="mu sm">vence ${fmtD(s.due)}</span>`:''}</span></span>
+      <input id="ra_${g.id}" type="number" inputmode="decimal" value="${amt}" onclick="event.stopPropagation()" style="max-width:110px;text-align:right;padding:8px 10px"></label>`).join(''):'<p class="mu">No tienes pagos por vencer.</p>'}</div>
+  <button class="full" onclick="saveRevision()">Guardar revisión</button>
+  <p class="mu sm" style="text-align:center">La app compara con la vez pasada y calcula cuánto gastaste, sin que anotes cada gasto.</p>`;
+}
+function saveRevision(){
+  const today=todayISO(), N='Revisión', me=defOwner();
+  // 1) pagos palomeados
+  // leer todo antes de guardar (guardar vuelve a dibujar la pantalla)
+  const pays=payList().filter(x=>$('#rp_'+x.g.id)?.checked).map(x=>({...x,v:num($('#ra_'+x.g.id).value)}));
+  const vals={}; for(const a of liveAccs()){ const el=$('#rv_'+a.id); if(el&&el.value!=='') vals[a.id]=num(el.value); }
+  let paidTot=0;
+  for(const x of pays){ if(x.v>0){ db(payOps(x.g,x.v,today,N,true)); paidTot+=x.v; } }
+  // 2) saldos de cuentas y tarjetas
+  const ops=[]; let spent=0, base=0;
+  for(const a of liveAccs().filter(accMine)){ if(!(a.id in vals)) continue;
+    const tdc=atype(a)==='tdc', real=vals[a.id], target=tdc?-Math.abs(real):real, d=Math.round((target-accBal(a))*100)/100, ok=accOk(a);
+    if(Math.abs(d)>=0.01) ops.push({table:'movements',action:'insert',row:{goal_id:null,kind:'concilia',account:a.name,amount:d,owner:a.owner||me,date:today,note:N}});
+    else if(!ok) ops.push({table:'movements',action:'insert',row:{goal_id:null,kind:'concilia',account:a.name,amount:0,owner:a.owner||me,date:today,note:N}});
+    if(!ok){ base++; continue; }
+    if(atype(a)==='vales') continue;
+    spent+=-d;                                       // menos dinero (o más deuda) = gastaste
+    if(tdc&&d<-0.5){ const r=ensureCardGoal(a); if(r.op) ops.push(r.op);
+      ops.push({table:'movements',action:'insert',row:{goal_id:r.g.id,kind:'carga',amount:-d,account:r.g.account,owner:a.owner||me,date:today,note:'Apartado automático por compras con '+a.name}}); }
+  }
+  spent=Math.round(spent*100)/100;
+  if(spent>0.5) ops.push({table:'movements',action:'insert',row:{goal_id:null,kind:'gasto',account:'Semana',category:'Gastos de la semana',amount:-spent,owner:me,date:today,note:N}});
+  else if(spent<-0.5) ops.push({table:'movements',action:'insert',row:{goal_id:null,kind:'ajuste',account:'Semana',amount:-spent,owner:me,date:today,note:N}});
+  if(!ops.length&&!pays.length) return toast('No pusiste ningún saldo ni pago');
+  if(ops.length) db(ops);
+  const prev=S.movs.filter(m=>m.category==='Gastos de la semana'&&m.date<today&&movMine(m))[0];
+  openSheet(`<div style="text-align:center"><div style="font-size:44px">📝</div><h1>Revisión guardada</h1></div>
+    ${spent>0.5?`<div class="ins" style="background:var(--rdl);color:#991b1b">Desde tu última revisión gastaste <b>${money(spent)}</b>${lastRevPrevDays()?` (≈ ${money(spent/lastRevPrevDays())} al día)`:''}.${prev?` La vez anterior: ${money(-prev.amount)}.`:''}</div>`:''}
+    ${spent<-0.5?`<div class="ins" style="background:var(--okl);color:#047857">Tienes <b>${money(-spent)}</b> más de lo que la app esperaba; se sumó a tu libre.</div>`:''}
+    ${base?`<div class="ins" style="background:var(--prl);color:var(--pr)">${base} cuenta(s) quedaron como punto de partida. Desde la próxima revisión la app calcula lo que gastes.</div>`:''}
+    ${paidTot?`<div class="ins" style="background:var(--okl);color:#047857">Pagos registrados: <b>${money(paidTot)}</b>.</div>`:''}
+    <div class="row" style="margin-top:10px"><span>💸 Tu libre ahora</span><b>${money(libre())}</b></div>
+    <button class="full" style="margin-top:14px" onclick="closeSheet();go('inicio')">Listo</button>`);
+}
+function lastRevPrevDays(){ const d=S.movs.filter(m=>m.note==='Revisión'&&m.date<todayISO()&&movMine(m)).reduce((x,m)=>m.date>x?m.date:x,''); return d?daysBetween(d,todayISO()):0; }
 
 // ---------- REPARTIR ----------
 function vRepartir(){
@@ -909,19 +975,60 @@ function goalActions(g){
     ${g.kind!=='meta'?`<button class="mini ok" onclick="sheetMove('${g.id}','pago')">💳 Pagar</button>`:''}
     <button class="mini gh" onclick="sheetEdit('${g.id}')">✏️ Editar</button></div>`;
 }
+function perQuin(g,s){ if(s.card) return s.cuota||0; if(g.kind==='fijo') return perQ(g); return s.cuotaQ||s.cuota||0; }
+function exRow(g){ // renglón tipo Excel: cuánto por quincena, cuánto llevas, cuándo se paga
+  const s=gst(g), [bg,fg]=KCOL[g.kind], T=g.kind==='pago'&&!isCyc(g)?+g.target:s.tgt, llevas=g.kind==='pago'&&!isCyc(g)?s.avance:s.saldo, pq=perQuin(g,s);
+  const col=s.barc||(s.stc==='red'?'var(--rd)':s.stc==='done'?'var(--ok)':fg);
+  return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div><div class="grow">
+    <div class="row"><span class="nm">${esc(g.name)}</span><span class="b" style="white-space:nowrap">${money(llevas)}${T?`<span class="mu"> / ${money(T)}</span>`:''}</span></div>
+    ${T?`<div class="bar"><i style="width:${Math.min(100,Math.max(0,T?llevas/T*100:0))}%;background:${col}"></i></div>`:''}
+    <div class="row" style="margin-top:5px"><span class="mu sm">${pq>0.5?`<b style="color:var(--tx)">${money(pq)}</b> por quincena`:''}${s.due?`${pq>0.5?' · ':''}${g.kind==='meta'?'meta':'paga'} ${fmtD(s.due)}`:''}</span><span class="st ${s.stc}" style="font-size:11px">${s.st}</span></div></div></div>`;
+}
+function cardRowEx(a){
+  const c=cardInfo(a), cg=cardGoals(a.name).find(g=>!g.archived), ap=cg?gst(cg).saldo:0;
+  return `<div class="item" onclick="sheetAccView('${a.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">💳</div><div class="grow">
+    <div class="row"><span class="nm">${esc(a.name)}</span><b class="${c.debt>0.5?'neg':''}">${money(c.debt)}</b></div>
+    ${c.lim?`<div class="bar"><i style="width:${Math.min(100,c.use)}%;background:${c.use>=90?'var(--rd)':c.use>=70?'var(--wa)':'#db2777'}"></i></div>`:''}
+    <div class="mu sm" style="margin-top:5px">${c.lim?`Límite ${money(c.lim)} · <b style="color:var(--tx)">disponible ${money(c.avail)}</b>`:'Pon tu límite en Editar'}</div>
+    <div class="mu sm">${c.corte?`Corte ${fmtD(c.corte)}`:'Sin día de corte'}${c.due?` · paga ${fmtD(c.due)}${c.dueAprox?' aprox.':''}`:''}</div>
+    <div class="mu sm">${c.sinInt>0.5?`Pagar sin intereses <b style="color:var(--tx)">${money(c.sinInt)}</b> · apartado ${money(ap)}`:'Sin pago pendiente'}</div></div></div>`;
+}
+function apartarTodo(){
+  const list=activeGoals().map(g=>[g,gst(g)]).filter(([g,s])=>s.pend>0.5), tot=sum(list.map(([g,s])=>Math.round(s.pend))), l=libre();
+  if(!list.length) return toast('Ya apartaste todo lo de esta quincena ✓');
+  if(!confirm(`Apartar ${money(tot)} en ${list.length} apartados?${tot>l+0.5?`\n\nOjo: tu libre es ${money(l)}, te quedarías en negativo.`:''}`)) return;
+  const rows=[]; for(const [g,s] of list) rows.push(...apartarOps(g,Math.round(s.pend),'aparta',null,todayISO()));
+  db({table:'movements',action:'insert',row:rows}); toast(`✅ ${money(tot)} apartados · te quedan ${money(libre())} libres`);
+}
 function vApartados(){
-  const gs=activeGoals().filter(g=>S.bank==='Todos'||g.account===S.bank);
-  const groups=[['fijo','📆 Gastos fijos'],['tdc','💳 Pago de tarjetas'],['pago','🤝 Deudas'],['meta','🎯 Metas de ahorro']];
-  const inG=(g,k)=>k==='tdc'?!!ex(g).card:k==='pago'?g.kind==='pago'&&!ex(g).card:g.kind===k;
+  const q=currentQ(), gs=activeGoals().filter(g=>S.bank==='Todos'||g.account===S.bank);
+  const fijos=gs.filter(g=>g.kind==='fijo'), deudas=gs.filter(g=>g.kind==='pago'&&!ex(g).card&&!isOldCard(g)), metas=gs.filter(g=>g.kind==='meta'), olds=gs.filter(isOldCard);
+  const cards=liveAccs().filter(a=>atype(a)==='tdc'&&accMine(a)), cardGs=activeGoals().filter(g=>ex(g).card);
   const arch=S.goals.filter(g=>g.archived&&mine(g));
+  const P=list=>sum(list.map(g=>perQuin(g,gst(g))));
+  const thisQ=ingresadoQ(q), lastQ=ingresadoQ(shiftQ(q,-1)), ref=thisQ||lastQ;
+  const pF=P(activeGoals().filter(g=>g.kind==='fijo')), pC=P(cardGs)+P(activeGoals().filter(isOldCard)), pD=P(activeGoals().filter(g=>g.kind==='pago'&&!ex(g).card&&!isOldCard(g))), pM=P(activeGoals().filter(g=>g.kind==='meta'));
+  const est=ref-pF-pC-pD-pM, pend=sum(activeGoals().map(g=>gst(g).pend));
+  const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span>${list.length?money(P(list))+'/q':''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
   return `<div class="row"><h1>Apartados</h1><button class="mini" onclick="sheetEdit('new')">＋ Nuevo</button></div>
   ${whoBar()}
+  <div class="card" style="background:linear-gradient(135deg,#eef2ff,#f5f3ff)"><h2>📋 Tu quincena</h2>
+    <div class="row"><span>💵 Te entra ${thisQ?'esta quincena':'(quincena pasada)'}</span><b class="pos">${money(ref)}</b></div>
+    <div class="row sm" style="margin-top:6px"><span>− 📆 Gastos fijos</span><span>${money(pF)}</span></div>
+    ${pC>0.5?`<div class="row sm"><span>− 💳 Tarjetas</span><span>${money(pC)}</span></div>`:''}
+    <div class="row sm"><span>− 🤝 Deudas</span><span>${money(pD)}</span></div>
+    <div class="row sm"><span>− 🎯 Metas</span><span>${money(pM)}</span></div>
+    <div class="row" style="border-top:1px solid var(--ln);margin-top:8px;padding-top:8px"><span class="b">= Te queda libre</span><b class="${est<0?'neg':'pos'}" style="font-size:20px">${money(est)}</b></div>
+    ${est<-0.5?'<p class="mu sm" style="margin:4px 0 0">Tus apartados piden más de lo que te entra. Baja alguna cuota o mueve una fecha.</p>':''}
+    <button class="full" style="margin-top:12px" onclick="apartarTodo()">${pend>0.5?`🎯 Apartar lo de esta quincena · ${money(pend)}`:'✓ Ya apartaste lo de esta quincena'}</button></div>
   <div class="chips">${['Todos',...moneyAccs().map(a=>a.name)].map(b=>`<button class="chip ${S.bank===b?'on':''}" onclick="S.bank='${esc(b)}';render()">${b==='Todos'?'🏦 Todos los bancos':`<i class="dot" style="background:${accColor(b)}"></i> ${esc(b)}`}</button>`).join('')}</div>
-  ${groups.map(([k,t])=>{ const list=gs.filter(g=>inG(g,k)); if(!list.length) return '';
-    if(k==='tdc') return `<div class="sect row"><span>${t}</span><span>${money(sum(list.map(g=>gst(g).saldo)))}</span></div><div class="card">${list.map(g=>{ const s=gst(g);
-      return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">💳</div><div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><b>${money(s.saldo)}</b></div><div class="row" style="margin-top:4px"><span class="st ${s.stc}">${s.st}</span><span class="mu sm">${s.tgt>0.5?'pagar '+money(s.tgt):''}</span></div></div></div>`; }).join('')}<p class="mu sm" style="margin:8px 0 0">Se apartan solos cuando pagas con tarjeta. El detalle está en <a href="#" onclick="event.preventDefault();go('cuentas')">Cuentas</a>.</p></div>`;
-    return `<div class="sect row"><span>${t}</span><span>${money(sum(list.map(g=>gst(g).saldo)))}</span></div><div class="card">${list.map(g=>goalRow(g,{actions:1})).join('')}</div>`; }).join('')}
-  ${!gs.length?`<div class="card empty"><span>🎯</span>${S.goals.length?'No hay apartados con este filtro.':'Crea tu primer apartado: renta, internet, Navidad, fondo médico…'}<br><button style="margin-top:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button></div>`:''}
+  ${sec('📆 Gastos fijos',fijos)}
+  <div class="sect row"><span>💳 Tarjetas de crédito</span><span>${cards.length?'debes '+money(sum(cards.map(a=>cardInfo(a).debt))):''}</span></div>
+  <div class="card">${cards.map(cardRowEx).join('')}${olds.map(exRow).join('')}${olds.length?'<p class="mu sm" style="margin:6px 0 0">💡 Toca una tarjeta vieja y dale "Convertir en tarjeta" para llevar límite, corte y pago.</p>':''}
+    ${!cards.length&&!olds.length?'<p class="mu">Sin tarjetas.</p>':''}<button class="sec mini" style="margin-top:10px" onclick="sheetAcc('new','tdc')">＋ Tarjeta</button></div>
+  ${sec('🤝 Deudas',deudas)}
+  ${sec('🎯 Metas',metas)}
+  ${!gs.length&&!cards.length?`<div class="card empty"><span>🎯</span>${S.goals.length?'No hay apartados con este filtro.':'Crea tu primer apartado: renta, internet, Navidad, fondo médico…'}<br><button style="margin-top:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button></div>`:''}
   ${arch.length?`<div class="sect">🗄 Archivados</div><div class="card">${arch.map(g=>`<div class="row"><span>${esc(g.icon||'')} ${esc(g.name)}</span><button class="gh mini" onclick="db({table:'goals',action:'update',row:{archived:false},match:{id:'${g.id}'}})">Restaurar</button></div>`).join('')}</div>`:''}`;
 }
 function sheetGoal(id){ const g=goalById(id); openSheet(`${goalRow(g)}${goalActions(g)}${historyOf(g)}`); }
@@ -946,6 +1053,18 @@ function sheetMove(id,kind,preset){
       <span>Ya quedó liquidado${g.due_date?`: pasar al siguiente pago (<b>${fmtD(addPeriod(g.due_date,freqOf(g)))}</b>)`:''}</span></label></div>`:''}`:''}
   <div class="grid2"><div><label>Nota</label><input id="mv_note" placeholder="Opcional"></div><div><label>Fecha</label><input id="mv_date" type="date" value="${todayISO()}"></div></div>
   <button class="full ${kind==='pago'?'ok':''}" style="margin-top:16px" onclick="saveMove('${id}','${kind}')">Guardar</button>`);
+}
+// ops para registrar un pago (lo que falte en el apartado sale del libre)
+function payOps(g,v,date,note,done){
+  const ops=[], sal=Math.max(0,gst(g).saldo), extra=v-sal;
+  if(extra>0.5) ops.push({table:'movements',action:'insert',row:{goal_id:g.id,kind:'aparta',account:g.account,amount:Math.round(extra*100)/100,owner:defOwner(),date,note:'Para completar el pago'}});
+  ops.push({table:'movements',action:'insert',row:apartarOps(g,v,'pago',note,date)});
+  const card=!!ex(g).card&&!!acc(ex(g).card);
+  if(!card&&g.subtype==='tdc'&&+ex(g).total) ops.push({table:'goals',action:'update',row:{extra:{...ex(g),total:Math.max(0,+ex(g).total-v)}},match:{id:g.id}});
+  if(!card&&isCyc(g)&&(done||gst(g).pagCiclo+v>=(+g.target||0)-0.5)){
+    const row={cycle_from:new Date(Date.now()+120000).toISOString()}; if(g.due_date) row.due_date=addPeriod(g.due_date,freqOf(g));
+    ops.push({table:'goals',action:'update',row,match:{id:g.id}}); }
+  return ops;
 }
 function saveMove(id,kind){
   const g=goalById(id), v=num($('#mv_amt').value)||(kind==='aparta'?Math.round(gst(g).pend):0); if(v<=0) return toast('Escribe un monto');
@@ -1317,7 +1436,7 @@ function vMas(){
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y tarjetas</div><div class="mu">Saldos reales, tarjetas, vales y patrimonio</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('movs')"><div class="ic" style="background:#fff7ed">🔎</div><div class="grow"><div class="nm">Movimientos</div><div class="mu">Buscar y editar cualquier movimiento</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('anaquel')"><div class="ic" style="background:var(--okl)">🧺</div><div class="grow"><div class="row"><span class="nm">Vida de anaquel</span>${n?`<span class="st red">${n} por comprar</span>`:'<span class="st green">Todo bien</span>'}</div><div class="mu">Lo que hay en casa, cuándo se acaba y cuánto cuesta</div></div></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('config')"><div class="ic" style="background:var(--bg)">⚙️</div><div class="grow"><div class="nm">Ajustes</div><div class="mu">Límite diario, categorías, personas y código para invitar</div></div></div>
+  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('config')"><div class="ic" style="background:var(--bg)">⚙️</div><div class="grow"><div class="nm">Ajustes</div><div class="mu">Categorías, personas y código para invitar</div></div></div>
   <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-top:6px;opacity:.95">`;
 }
 
@@ -1326,8 +1445,6 @@ function vConfig(){
   const cats=S.hh.categories||[];
   return `<button class="gh mini" style="padding-left:0" onclick="go('mas')">‹ Más</button><div class="row"><h1>⚙️ Ajustes</h1></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y tarjetas</div><div class="mu">Agregar, editar y cuadrar con el banco</div></div><span class="mu">›</span></div>
-  <div class="card"><h2>🐷 Límite de gasto diario</h2><p class="mu" style="margin-top:0">Lo que no gastes un día se acumula para después; si te pasas, se descuenta de los siguientes. Empieza a contar el día que lo actives.</p>
-    ${people().filter(p=>p!=='Compartido').map(p=>{ const L=(S.hh.limits||{})[p]; return `<div class="row" style="margin-top:8px"><span style="width:70px" class="b">${esc(p)}</span><input id="lim_${esc(p)}" type="number" inputmode="decimal" value="${L?L.amt:''}" placeholder="Ej. 200" style="padding:9px 11px"><button class="mini" onclick="setLimit('${esc(p)}')">${L?'Guardar':'Activar'}</button>${L?`<button class="mini dg" onclick="setLimit('${esc(p)}',true)">✕</button>`:''}</div>${L?`<div class="mu sm" style="margin:3px 0 0 80px">Desde el ${fmtD(L.from)}</div>`:''}`; }).join('')}</div>
   <div class="card"><h2>🏷 Categorías de gasto</h2><div class="chips" style="flex-wrap:wrap">${cats.map(c=>`<button class="chip" onclick="delCat('${esc(c)}')">${catIc(c)} ${esc(c)} ✕</button>`).join('')}</div>
     <div class="row"><input id="newcat" placeholder="Nueva (ej. 🧁 Postres)"><button class="mini" onclick="addCat()">Agregar</button></div></div>
   <div class="card"><h2>👥 Personas</h2>${S.members.map(m=>`<div class="row"><input id="mn_${m.user_id}" value="${esc(m.display_name||'')}"><button class="mini sec" onclick="renameMember('${m.user_id}')">Guardar</button></div>`).join('')}
