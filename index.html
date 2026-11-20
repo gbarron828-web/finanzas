@@ -168,7 +168,7 @@ a{color:var(--pr);font-weight:600;text-decoration:none}
 
 /* ---------- v19: diseño ---------- */
 .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:#e6e7f5;border-radius:16px;padding:4px;margin:0 0 14px}
-.seg button{background:transparent;color:var(--mu);padding:10px 4px;font-size:14px;border-radius:12px;font-weight:700}
+.seg button{background:transparent;color:var(--mu);padding:10px 2px;font-size:13px;white-space:nowrap;border-radius:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis}
 .seg button.on{background:#fff;color:var(--pr);box-shadow:0 2px 8px rgba(79,70,229,.15)}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .tile{border-radius:20px;padding:14px 15px;cursor:pointer;min-width:0}
@@ -189,15 +189,18 @@ a{color:var(--pr);font-weight:600;text-decoration:none}
 .hbar b{text-align:right}
 .chk{width:26px;height:26px;border-radius:8px;border:2px solid #cbd5e1;background:#fff;flex:none;padding:0;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center}
 .chk.on{background:var(--ok);border-color:var(--ok)}
+.pups.mini{bottom:6px;gap:2px}.pups.mini .pup{width:20px;height:14px}
+.wtrack{position:relative;padding-top:16px;margin-top:2px}
+.track{margin-top:18px}
 </style>
 </head>
 <body>
 <div id="app"><p class="mu" style="text-align:center;margin-top:40vh">Cargando…</p></div>
 <nav id="nav" hidden>
   <button data-t="finanzas" onclick="go('finanzas')"><span>💰</span>Finanzas</button>
-  <button data-t="anaquel" onclick="go('anaquel')" style="position:relative"><span>🧺</span>Anaquel<em id="anqBadge" class="badge" hidden></em></button>
-  <button data-t="analisis" onclick="go('analisis')"><span>📊</span>Análisis</button>
-  <button data-t="config" onclick="go('config')"><span>⚙️</span>Ajustes</button>
+  <button data-t="anaquel" onclick="S.anq='tengo';go('anaquel')"><span>🧺</span>Anaquel</button>
+  <button data-t="compras" onclick="go('compras')" style="position:relative"><span>🛒</span>Compras<em id="anqBadge" class="badge" hidden></em></button>
+  <button data-t="config" onclick="go('config')"><span>⚙️</span>Configuración</button>
 </nav>
 <div id="sheet" onclick="if(event.target===this)closeSheet()"><div class="box" id="sbox"><div class="shead"><div class="grab"></div><button class="xbtn" onclick="closeSheet()" aria-label="Cerrar">✕</button></div><div id="sheetBody"></div></div></div>
 <div id="toast"></div>
@@ -234,7 +237,9 @@ function fmtD(d){ if(!d) return ''; const [y,m,dd]=d.split('-'); return `${+dd} 
 function qOf(d){ const [y,m,day]=d.split('-').map(Number);
   if(day>=qEnd(y,m)) return iso(y,m,qEnd(y,m)); if(day>=15) return iso(y,m,15);
   const pm=m===1?12:m-1, py=m===1?y-1:y; return iso(py,pm,qEnd(py,pm)); }
-const currentQ = () => qOf(todayISO());
+const PAYDAYS=4; // la nómina a veces cae antes del 15 o del 30
+const qPay = d => qOf(addDays(d,PAYDAYS));
+const currentQ = () => qPay(todayISO());
 function shiftQ(q,n){ if(!n) return q; let x=q; const d=n<0?-1:1; for(let i=0;i<Math.min(Math.abs(n),600);i++) x=shiftQ1(x,d); return x; }
 function shiftQ1(q,dir){ let [y,m,d]=q.split('-').map(Number);
   if(dir>0){ if(d===15) return iso(y,m,qEnd(y,m)); m++; if(m>12){m=1;y++;} return iso(y,m,15); }
@@ -371,7 +376,7 @@ function cardInfo(a){
   return {debt,corte,due,dueAprox,stmt,auto,paid,sinInt,lim,avail:lim?lim-debt:null,use:lim?debt/lim*100:null};
 }
 // ---------- cálculos ----------
-const inQ = (m,q) => qOf(m.date)===q;
+const inQ = (m,q) => qPay(m.date)===q;
 function libre(){ let t=0; for(const m of S.movs) if(movMine(m)) t+=libreFx(m); return t; }
 const libreDe = p => { const w=S.who; S.who=p; const l=libre(); S.who=w; return l; };
 const daysLeft = () => Math.max(1, daysBetween(todayISO(), shiftQ(currentQ(),1)));
@@ -490,8 +495,8 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) { flush(
 function render(){ try{ if(S.hh&&S.user&&S.movs) autoIncomes(); }catch(e){ console.error(e); }
   if(!S.hh) return;
   $('#nav').hidden=false;
-  const navT={inicio:'finanzas',apartados:'finanzas',repartir:'finanzas',revision:'finanzas',cuentas:'config',movs:'config',mas:'config'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
-  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({finanzas:vFinanzas,inicio:vFinanzas,apartados:()=>{S.fin='apartados';S.tab='finanzas';return vFinanzas();},analisis2:vAnalisis,repartir:vRepartir,apartados:vApartados,analisis:vAnalisis2,config:vConfig,anaquel:vAnaquel,mas:vMas,cuentas:vCuentas,movs:vMovs,revision:vRevision}[S.tab]||vInicio)();
+  const navT={analisis:'finanzas',inicio:'finanzas',apartados:'finanzas',repartir:'finanzas',revision:'finanzas',cuentas:'config',movs:'config',mas:'config'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
+  $('#app').innerHTML=`<div id="net" class="alert y" style="display:none"></div>`+({finanzas:vFinanzas,inicio:vFinanzas,apartados:()=>{S.fin='apartados';S.tab='finanzas';return vFinanzas();},analisis2:vAnalisis,repartir:vRepartir,apartados:vApartados,analisis:()=>{S.fin='analisis';S.tab='finanzas';return vFinanzas();},compras:()=>`<h1>🛒 Lista de compras</h1>`+vListaCompras(),config:vConfig,anaquel:vAnaquel,mas:vMas,cuentas:vCuentas,movs:vMovs,revision:vRevision}[S.tab]||vInicio)();
   renderNet(); const n=S.pantry.filter(p=>pst(p).c!=='green').length, bd=$('#anqBadge'); if(bd){ bd.hidden=!n; bd.textContent=n; }
 }
 function go(t){ S.tab=t; render(); scrollTo(0,0); }
@@ -801,6 +806,7 @@ function dogSVG(kind, mode){
   else inner=`${legs}${body}${head}`;
   return `<svg class="pup" viewBox="0 0 48 32">${inner}</svg>`;
 }
+function walkPups(pct){ return `<div class="pups run mini" style="left:max(48px,${Math.max(0,Math.min(100,pct))}%)">${dogSVG('ted','run')}${dogSVG('lia','run')}</div>`; }
 function pups(pct, mode){
   return `<div class="pups ${mode}" style="left:max(60px,${mode==='sleep'?0:pct}%)">${dogSVG('ted',mode)}${dogSVG('lia',mode)}${mode==='sleep'?'<span class="zzz"><i>z</i><i>z</i><i>z</i></span>':''}</div>`;
 }
@@ -817,7 +823,7 @@ function goalRow(g, opts={}){
   return `<div class="item" ${opts.click?`onclick="sheetGoal('${g.id}')" style="cursor:pointer"`:''}>
     <div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div>
     <div class="grow"><div class="row"><span class="nm">${esc(g.name)}</span><span class="b" style="white-space:nowrap">${right}</span></div>
-      ${showBar?(opts.dogs?`<div class="track"><div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>${pups(s.pct, s.stc==='done'||s.pct>=99.5?'sit':s.pct<=0.5?'sleep':'run')}</div>`:`<div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>`):''}
+      ${showBar?(opts.dogs?`<div class="track"><div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>${walkPups(s.pct)}</div>`:`<div class="bar"><i style="width:${s.pct}%;background:${barCol}"></i></div>`):''}
       <div class="row" style="margin-top:6px"><span class="st ${s.stc}">${s.st}</span><span class="mu">${sub}</span></div>
       ${s.card?cardLine(g,s):g.subtype==='tdc'?tdcLine(g,s):''}
       ${isOldCard(g)&&!opts.dogs?`<div class="mu sm" style="margin-top:6px" onclick="event.stopPropagation()">💡 <a href="#" onclick="event.preventDefault();linkCard('${g.id}')">Convertir en tarjeta</a>: la deuda sube sola con tus gastos y la app calcula cuánto pagar.</div>`:''}
@@ -883,7 +889,7 @@ function autoIncomes(){
   const rows=[];
   for(const x of planInc()){ if(x.from&&q<x.from) continue; const owner=x.owner||'Compartido', id=autoId(x,q);
     if(S.movs.some(m=>m.id===id||(m.kind==='ingreso'&&(m.category||'')===x.c&&movOwner(m)===owner&&inQ(m,q)))) continue;
-    rows.push({id,goal_id:null,kind:'ingreso',amount:+x.v,account:homeAcc(owner)||(moneyAccs()[0]||{}).name||'Banorte',category:x.c,owner:x.owner||null,date:q,note:'Ingreso fijo'}); }
+    rows.push({id,goal_id:null,kind:'ingreso',amount:+x.v,account:homeAcc(owner)||(moneyAccs()[0]||{}).name||'Banorte',category:x.c,owner:x.owner||null,date:q>todayISO()?todayISO():q,note:'Ingreso fijo'}); }
   if(rows.length) db({table:'movements',action:'insert',row:rows});
 }
 function addPlanInc(){ const c=$('#pi_newc').value.trim(), v=num($('#pi_newv').value); if(!c||v<=0) return toast('Pon concepto y monto');
@@ -1067,7 +1073,7 @@ function exRow(g){ // renglón tipo Excel
   return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div><div class="grow">
     <div class="row"><span class="nm">${esc(g.name)}</span><span style="white-space:nowrap"><span class="mu sm">tienes </span><b>${money(tienes)}</b></span></div>
     <div class="mu sm">${T?`${debt?'Debes':g.kind==='meta'?'Meta':'Pagar'} ${money(debt?Math.max(0,T-s.pagado):T)}`:''}${s.due?` · ${g.kind==='meta'?'para el':'vence'} ${fmtD(s.due)}`:''}</div>
-    ${T?`<div class="bar" style="margin-top:6px"><i style="width:${pct}%;background:${col}"></i></div>`:''}
+    ${T?`<div class="wtrack"><div class="bar" style="margin-top:0"><i style="width:${pct}%;background:${col}"></i></div>${walkPups(pct)}</div>`:''}
     <div class="row" style="margin-top:6px;gap:6px"><span class="sm">${pq>0.5?`Cada quincena <b>${money(pq)}</b> · esta quincena metiste ${money(s.aportQ)}`:'Sin cuota por quincena'}</span>
       ${pq>0.5?(f>0.5?`<button class="mini ok" style="padding:6px 10px;white-space:nowrap" onclick="event.stopPropagation();quickAp('${g.id}',${f})">＋ ${money(f)}</button>`:'<span class="st green" style="font-size:11px">✓ completo</span>'):''}</div>
     ${g.kind!=='meta'?`<div style="margin-top:8px" onclick="event.stopPropagation()"><button class="mini sec" onclick="yaPagado('${g.id}')">✓ Ya se pagó${toPay(g,s)>0.5?' · '+money(toPay(g,s)):''}</button></div>`:''}</div></div>`;
@@ -1449,8 +1455,7 @@ function vAnaquel(){
           ${p.empty?'':`<button class="mini sec" onclick="pantryOut('${p.id}')">😮 Se acabó</button>`}</div></div></div>`; };
   const nL=S.pantry.filter(enLista).length, tab=S.anq||'tengo';
   const head=`<div class="row"><h1>🧺 Vida de anaquel</h1><button class="mini" onclick="sheetPantry('new')">＋ Producto</button></div>
-  <div class="seg"><button class="${tab==='tengo'?'on':''}" onclick="S.anq='tengo';render()">🏠 Lo que tengo</button><button class="${tab==='lista'?'on':''}" onclick="S.anq='lista';render()">📝 Lista de compras${nL?' · '+nL:''}</button></div>`;
-  if(tab==='lista') return head+vListaCompras();
+  <p class="mu" style="margin-top:-6px">Lo que hay en casa y cuándo se acaba. Lo que se termina pasa solo a 🛒 Compras${nL?` (${nL})`:''}.</p>`;
   return head+`
   ${false&&compra.length?`<div class="card" style="border:2px solid var(--wal)"><h2>📝 Lista del súper · ${compra.length}</h2>
     ${compra.map(p=>{ const s=pst(p); return `<div class="row" style="padding:6px 0;border-top:1px solid var(--ln)"><span>${esc(p.icon||'🛒')} <b>${esc(p.name)}</b> <span class="st ${s.c}">${s.t}</span></span><button class="mini ok" onclick="pantryBuy('${p.id}')">✓</button></div>`; }).join('')}</div>`:''}
@@ -1516,9 +1521,9 @@ function finHeader(){
   const q=currentQ(), nq=shiftQ(q,1), f=S.fin||'quincena';
   return `<div class="hello"><img src="icon.png" alt=""><div><h1 style="margin:0">Hola${S.me?', '+esc(first(S.me)):''} 👋</h1><div class="mu">Quincena del ${fmtD(q)} al ${fmtD(nq)}</div></div></div>
   ${whoBar()}
-  <div class="seg">${[['quincena','🧮 Quincena'],['apartados','🎯 Apartados'],['tarjetas','💳 Tarjetas']].map(([k,t])=>`<button class="${f===k?'on':''}" onclick="S.tab='finanzas';S.fin='${k}';render();scrollTo(0,0)">${t}</button>`).join('')}</div>`;
+  <div class="seg">${[['quincena','🧮 Quincena'],['apartados','🎯 Apartados'],['tarjetas','💳 Tarjetas'],['analisis','📊 Análisis']].map(([k,t])=>`<button class="${f===k?'on':''}" onclick="S.tab='finanzas';S.fin='${k}';render();scrollTo(0,0)">${t}</button>`).join('')}</div>`;
 }
-function vFinanzas(){ const f=S.fin||'quincena'; return finHeader()+(f==='apartados'?vApartados():f==='tarjetas'?vTarjetas():vQuincena()); }
+function vFinanzas(){ const f=S.fin||'quincena'; return finHeader()+(f==='apartados'?vApartados():f==='tarjetas'?vTarjetas():f==='analisis'?vAnalisis2().replace(/^<h1>[^<]*<\/h1>/,'').replace(whoBar(),''):vQuincena()); }
 function quinData(){
   const AG=activeGoals(), P=list=>sum(list.map(g=>perQuin(g,gst(g))));
   const fij=AG.filter(g=>g.kind==='fijo'), crd=AG.filter(g=>ex(g).card||isOldCard(g)), deb=AG.filter(g=>g.kind==='pago'&&!ex(g).card&&!isOldCard(g)), met=AG.filter(g=>g.kind==='meta');
@@ -1654,7 +1659,6 @@ function vConfig(){
   return `<div class="row"><h1>⚙️ Ajustes</h1></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y bancos</div><div class="mu">Dónde está tu dinero y tu patrimonio</div></div><span class="mu">›</span></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('movs')"><div class="ic" style="background:#fff7ed">🔎</div><div class="grow"><div class="nm">Movimientos</div><div class="mu">Buscar y corregir cualquier movimiento</div></div><span class="mu">›</span></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="sheetIngreso()"><div class="ic" style="background:#d1fae5">💵</div><div class="grow"><div class="nm">Ingreso extra</div><div class="mu">Dinero que no está en tus ingresos fijos</div></div><span class="mu">›</span></div>
   <div class="card"><h2>👥 Personas</h2>${S.members.map(m=>`<div class="row"><input id="mn_${m.user_id}" value="${esc(m.display_name||'')}"><button class="mini sec" onclick="renameMember('${m.user_id}')">Guardar</button></div>`).join('')}
     <div class="row" style="margin-top:14px"><span>Código para invitar</span><span class="code">${esc(S.hh.invite_code)}</span></div></div>
   <div class="card"><h2>🧹 Empezar de cero</h2><p class="mu" style="margin-top:0">Borra todos los apartados, ingresos y gastos${S.who!=='Todos'?'':' de los dos'}. Bancos, categorías y personas se quedan.</p>
