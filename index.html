@@ -1068,8 +1068,8 @@ function perQuin(g,s){ if(s.card) return s.cuota||0; if(g.kind==='fijo') return 
 function faltaQ(g,s){ const sq=(S.hh.plan||{}).startQ; if(sq&&currentQ()<sq) return 0; s=s||gst(g); const pq=perQuin(g,s); let f=Math.max(0,pq-s.aportQ); const T=s.tgt; if(T&&!(g.kind==='pago'&&!isCyc(g))) f=Math.min(f,Math.max(0,T-s.saldo));
   if(g.kind==='pago'&&!isCyc(g)&&+g.target) f=Math.min(f,Math.max(0,+g.target-s.pagado-s.saldo)); return Math.round(f); }
 function exRow(g){ // renglón tipo Excel
-  const s=gst(g), [bg,fg]=KCOL[g.kind], debt=g.kind==='pago'&&!isCyc(g), T=debt?+g.target:s.tgt, tienes=s.saldo, pq=perQuin(g,s), f=faltaQ(g,s);
-  const col=debt?'#ea580c':s.stc==='red'?'var(--rd)':fg, pct=T?Math.min(100,Math.max(0,(debt?s.avance:tienes)/T*100)):0;
+  const s=gst(g), gc=ex(g).color, [bg,fg]=gc?[gc+'22',gc]:KCOL[g.kind], debt=g.kind==='pago'&&!isCyc(g), T=debt?+g.target:s.tgt, tienes=s.saldo, pq=perQuin(g,s), f=faltaQ(g,s);
+  const col=gc||(debt?'#ea580c':s.stc==='red'?'var(--rd)':fg), pct=T?Math.min(100,Math.max(0,(debt?s.avance:tienes)/T*100)):0;
   return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div><div class="grow">
     <div class="row"><span class="nm">${esc(g.name)}</span><span style="white-space:nowrap"><span class="mu sm">tienes </span><b>${money(tienes)}</b></span></div>
     <div class="mu sm">${T?`${debt?'Debes':g.kind==='meta'?'Meta':'Pagar'} ${money(debt?Math.max(0,T-s.pagado):T)}`:''}${s.due?` · ${g.kind==='meta'?'para el':'vence'} ${fmtD(s.due)}`:''}</div>
@@ -1081,14 +1081,26 @@ function exRow(g){ // renglón tipo Excel
 function toPay(g,s){ s=s||gst(g); if(s.card) return s.tgt||0; if(isCyc(g)) return Math.max(0,(+g.target||0)-s.pagCiclo); return Math.min(Math.max(0,+g.target-s.pagado), +g.cuota||s.cuota||Math.max(0,s.saldo)); }
 function yaPagado(id){ const g=goalById(id), v=Math.round(toPay(g)); sheetMove(id,'pago',v||undefined); }
 function quickAp(id,v){ const g=goalById(id); if(doApartar(g,v)) toast(`✅ ${money(v)} a ${g.name} · libre ${money(libre())}`); }
-function cardRowEx(a){
-  const c=cardInfo(a), cg=cardGoals(a.name).find(g=>!g.archived), ap=cg?gst(cg).saldo:0;
-  return `<div class="item" onclick="sheetAccView('${a.id}')" style="cursor:pointer"><div class="ic" style="background:#fff1f2">💳</div><div class="grow">
-    <div class="row"><span class="nm">${esc(a.name)}</span><b class="${c.debt>0.5?'neg':''}">${money(c.debt)}</b></div>
-    ${c.lim?`<div class="bar"><i style="width:${Math.min(100,c.use)}%;background:${c.use>=90?'var(--rd)':c.use>=70?'var(--wa)':'#db2777'}"></i></div>`:''}
-    <div class="mu sm" style="margin-top:5px">${c.lim?`Límite ${money(c.lim)} · <b style="color:var(--tx)">disponible ${money(c.avail)}</b>`:'Pon tu límite en Editar'}</div>
-    <div class="mu sm">${c.corte?`Corte ${fmtD(c.corte)}`:'Sin día de corte'}${c.due?` · paga ${fmtD(c.due)}${c.dueAprox?' aprox.':''}`:''}</div>
-    <div class="mu sm">${c.sinInt>0.5?`Pagar sin intereses <b style="color:var(--tx)">${money(c.sinInt)}</b> · apartado ${money(ap)}`:'Sin pago pendiente'}</div></div></div>`;
+function cardRowEx(a,actions){
+  const c=cardInfo(a), cg=cardGoals(a.name).find(g=>!g.archived), s=cg?gst(cg):null, ap=s?s.saldo:0;
+  const exact=a.corte_bal!=null&&a.corte_date&&c.corte&&a.corte_date>=c.corte;
+  const falta=Math.max(0,c.sinInt-ap), f=cg?faltaQ(cg,s):0, col=a.color||'#db2777';
+  const ln=(t,v,b)=>`<div class="row sm" style="padding:2px 0;margin:0"><span class="mu">${t}</span>${b?`<b>${v}</b>`:`<span>${v}</span>`}</div>`;
+  return `<div class="item" style="align-items:flex-start"><div class="ic" style="background:${col}22;color:${col}">💳</div><div class="grow">
+    <div class="row" onclick="sheetAcc('${a.id}')" style="cursor:pointer"><span class="nm">${esc(a.name)} <span class="mu sm">✏️</span></span><span><span class="mu sm">debes </span><b class="${c.debt>0.5?'neg':''}">${money(c.debt)}</b></span></div>
+    ${c.lim?`<div class="wtrack"><div class="bar" style="margin-top:0"><i style="width:${Math.min(100,c.use)}%;background:${c.use>=90?'var(--rd)':c.use>=70?'var(--wa)':col}"></i></div>${walkPups(Math.min(100,c.use))}</div>`:''}
+    <div style="margin-top:6px">
+      ${ln('Límite',c.lim?money(c.lim):'—')}${c.lim?ln('Disponible',money(c.avail),1):''}
+      ${ln('Corte',c.corte?fmtD(c.corte):'pon tu día de corte')}${ln('Pagar antes del',c.due?fmtD(c.due)+(c.dueAprox?' (aprox.)':''):'—',1)}
+      <div style="border-top:1px solid var(--ln);margin:6px 0"></div>
+      ${ln('Pago de este mes',c.sinInt>0.5?money(c.sinInt):'$0',1)}
+      ${!exact&&c.debt>0.5?`<div class="mu sm" style="color:#b45309">⚠️ Es lo que debes en total. Toca ✏️ y pon el "pago del mes" de tu estado de cuenta.</div>`:''}
+      ${ln('Ya apartaste',money(ap))}${ln('Te falta apartar',money(falta),1)}
+    </div>
+    ${actions?`<div class="row" style="gap:6px;margin-top:8px;justify-content:flex-start;flex-wrap:wrap">
+      ${f>0.5&&cg?`<button class="mini ok" onclick="quickAp('${cg.id}',${f})">＋ ${money(f)}</button>`:''}
+      <button class="mini sec" onclick="payCard('${a.id}')">✓ Ya se pagó</button>
+      <button class="mini gh" onclick="sheetAcc('${a.id}')">✏️ Actualizar</button></div>`:''}</div></div>`;
 }
 function apartarTodo(){
   const list=activeGoals().map(g=>[g,faltaQ(g)]).filter(([g,f])=>f>0.5), tot=sum(list.map(([g,f])=>f)), l=libre();
@@ -1107,6 +1119,9 @@ function vApartados(){
   const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span style="text-align:right;line-height:1.25">${list.length?`<span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(sum(list.map(g=>gst(g).saldo)))}</b></span><br><span style="font-size:11px">${money(P(list))} por quincena</span>`:''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
   return `
   ${sec('📆 Gastos fijos',fijos)}
+  ${(()=>{ const cs=liveAccs().filter(a=>atype(a)==='tdc'&&accMine(a)); if(!cs.length&&!olds.length) return '';
+    const ap=sum(cs.map(a=>{ const g=cardGoals(a.name).find(x=>!x.archived); return g?gst(g).saldo:0; }));
+    return `<div class="sect row"><span>💳 Tarjetas</span><span style="text-align:right;line-height:1.25"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(ap)}</b></span><br><span style="font-size:11px">debes ${money(sum(cs.map(a=>cardInfo(a).debt)))}</span></span></div><div class="card">${cs.map(a=>cardRowEx(a,1)).join('')}${olds.map(exRow).join('')}</div>`; })()}
   ${sec('🤝 Deudas',deudas)}
   ${sec('🎯 Metas',metas)}
   <button class="sec full" style="margin-bottom:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button>
@@ -1167,16 +1182,18 @@ function saveMove(id,kind){
 const isCyc = g => g.kind==='fijo' || (g.kind==='pago' && g.subtype==='tdc');   // se paga por periodos
 const SUBS = {tdc:'💳 Tarjeta', prestamo:'🏦 Préstamo', otro:'📄 Otra'};
 const ex = g => g.extra||{};
+const GCOLS=['#6366f1','#10b981','#f59e0b','#ef4444','#ec4899','#0ea5e9','#8b5cf6','#14b8a6','#f97316','#64748b'];
 function sheetEdit(id){
   const g=id==='new'?{kind:'fijo',account:(S.accounts[0]||{}).name||'Banorte',owner:defOwner(),icon:'🎯',freq_months:1,subtype:'tdc',extra:{}}:goalById(id);
   const e=ex(g);
-  window._gid=id; window._ic=g.icon||'🎯'; window._sub=g.subtype||(g.kind==='pago'?'otro':'tdc'); window._plan=e.plan||'corte';
+  window._gid=id; window._gcol=e.color||''; window._ic=g.icon||'🎯'; window._sub=g.subtype||(g.kind==='pago'?'otro':'tdc'); window._plan=e.plan||'corte';
   openSheet(`<h1>${id==='new'?'Nuevo apartado':'Editar'}</h1>
   <label>Tipo</label><div class="grid3" id="e_kind">${Object.keys(KINDS).map(k=>`<button class="mini ${g.kind===k?'':'sec'}" data-k="${k}" onclick="setKind('${k}')">${{fijo:'📆 Fijo',pago:'🤝 Deuda',meta:'🎯 Meta'}[k]}</button>`).join('')}</div>
   <input type="hidden" id="e_k" value="${g.kind}">
   <div id="e_subw"><label>¿Qué tipo de deuda?</label><div class="grid3" id="e_sub">${Object.entries(SUBS).map(([k,t])=>`<button class="mini" data-s="${k}" onclick="setSub('${k}')">${t}</button>`).join('')}</div></div>
   <p class="mu sm" id="e_help" style="margin:8px 0 0"></p>
   <label>Ícono</label><div class="chips" id="e_ics" style="flex-wrap:wrap">${EMOJIS.map(x=>`<button class="chip ${x===window._ic?'on':''}" style="padding:6px 9px;font-size:20px" onclick="window._ic='${x}';pickOn('e_ics',this)">${x}</button>`).join('')}</div>
+  <label>Color</label><div class="chips" id="e_cols">${GCOLS.map(c=>`<button class="chip ${c===(e.color||'')?'on':''}" style="background:${c};border-color:${c};width:36px;height:36px;padding:0" onclick="window._gcol='${c}';pickOn('e_cols',this)"></button>`).join('')}</div>
   <label>Nombre</label><input id="e_name" value="${esc(g.name)}" placeholder="Ej. Internet">
   <div id="e_tdc" class="card" style="background:var(--bg);box-shadow:none;padding:12px;margin:12px 0 0">
     <div class="grid2"><div><label style="margin-top:0">Deuda total</label><input id="e_total" type="number" inputmode="decimal" value="${e.total??''}" placeholder="Todo lo que debes"></div>
@@ -1237,7 +1254,7 @@ function saveGoal(id){
     due_date:$('#e_due').value||null,freq_months:$('#e_freq').value===''?1:+$('#e_freq').value,cuota:num($('#e_cuota').value)||null,account:$('#e_acc').value,owner:$('#e_owner').value};
   if(!row.name) return toast('Ponle nombre');
   const old=id==='new'?null:goalById(id);
-  if(kind==='meta') row.extra={...ex(old||{}),cfreq:$('#e_cf').value};
+  row.extra={...ex(old||{}),...(row.extra||{})}; if(kind==='meta') row.extra.cfreq=$('#e_cf').value; if(window._gcol) row.extra.color=window._gcol;
   if(old&&ex(old).card){ Object.assign(row,{kind:'pago',subtype:'tdc',extra:ex(old),target:null,due_date:null,cuota:null}); }
   else if(sub==='tdc'){
     const x={total:num($('#e_total').value)||null,corte:num($('#e_corte').value)||null,minimo:num($('#e_min').value)||null,fcorte:$('#e_fcorte').value||null,plan:window._plan,otro:num($('#e_otro').value)||null};
@@ -1471,12 +1488,12 @@ function sheetPantry(id){
   <div class="chips" style="margin-top:8px;flex-wrap:wrap">${[[7,'1 semana'],[15,'Quincena'],[30,'1 mes'],[45,'Mes y medio'],[60,'2 meses'],[90,'3 meses']].map(([d,t])=>`<button class="chip" onclick="$('#p_days').value=${d}">${t}</button>`).join('')}</div>
   ${s&&s.learned?`<p class="mu sm">Según tus compras te dura ~${s.est} días; la app usa ese dato.</p>`:''}
   <div class="grid2"><div><label>Última compra</label><input id="p_last" type="date" value="${p.last_bought||todayISO()}"></div><div><label>Cantidad (opcional)</label><input id="p_qty" value="${esc(p.qty||'')}" placeholder="Ej. 2 bolsas"></div></div>
-  <label>Nota (opcional)</label><input id="p_note" value="${esc(p.note||'')}" placeholder="Marca, tienda…">
+  <div class="grid2"><div><label>Precio</label><input id="p_price" type="number" inputmode="decimal" value="${p.price??''}" placeholder="$"></div><div><label>Nota (opcional)</label><input id="p_note" value="${esc(p.note||'')}" placeholder="Marca, tienda…"></div></div>
   <button class="full" style="margin-top:16px" onclick="savePantry('${id}')">Guardar</button>
   ${id!=='new'?`<button class="dg full" style="margin-top:10px" onclick="delPantry('${id}')">🗑 Borrar producto</button>`:''}`);
 }
 function savePantry(id){
-  const row={name:$('#p_name').value.trim(),icon:window._pic,days:Math.max(1,parseInt($('#p_days').value)||30),last_bought:$('#p_last').value||todayISO(),qty:$('#p_qty').value.trim()||null,note:$('#p_note').value.trim()||null};
+  const row={name:$('#p_name').value.trim(),icon:window._pic,days:Math.max(1,parseInt($('#p_days').value)||30),last_bought:$('#p_last').value||todayISO(),qty:$('#p_qty').value.trim()||null,note:$('#p_note').value.trim()||null,price:num($('#p_price').value)||null};
   if(!row.name) return toast('Ponle nombre');
   if(id==='new'){ row.sort=S.pantry.length; db({table:'pantry',action:'insert',row}); } else db({table:'pantry',action:'update',row,match:{id}});
   closeSheet(); toast('✅ Guardado');
@@ -1561,11 +1578,14 @@ function vTarjetas(){
   const tot=sum(cards.map(a=>cardInfo(a).debt))+sum(olds.map(oldCardDebt)), lim=sum(cards.map(a=>+a.limite||0));
   return `<div class="hero" style="background:linear-gradient(135deg,#be185d,#db2777 55%,#7c3aed)"><div class="mu">💳 Debes en tarjetas</div><div class="big">${money(tot)}</div>
     ${lim?`<div class="mu">Límite total ${money(lim)} · disponible ${money(lim-sum(cards.map(a=>cardInfo(a).debt)))}</div>`:''}</div>
-  <div class="card">${cards.map(a=>cardRowEx(a)+`<div style="margin:-4px 0 10px 54px" onclick="event.stopPropagation()"><button class="mini sec" onclick="payCard('${a.id}')">✓ Ya se pagó</button> <button class="mini gh" onclick="sheetAcc('${a.id}')">✏️ Actualizar</button></div>`).join('')}
+  <div class="card">${cards.map(a=>cardRowEx(a,1)).join('')}
     ${olds.map(exRow).join('')}
     ${!cards.length&&!olds.length?'<p class="mu">Aún no agregas tarjetas.</p>':''}
     <button class="full" style="margin-top:10px" onclick="sheetAcc('new','tdc')">＋ Agregar tarjeta</button></div>
-  <p class="mu sm" style="text-align:center">Cada semana o cuando veas tu app del banco, toca ✏️ Actualizar y pon lo que debes. La app calcula cuánto pagar y cuándo.</p>`;
+  <div class="card"><h2>🧮 Cómo se calcula</h2><p class="sm" style="margin:0">
+    <b>Debes</b>: lo que pusiste en ✏️, y sube solo si registras compras con la tarjeta.<br>
+    <b>Pago de este mes</b>: el "pago para no generar intereses" de tu estado de cuenta, menos lo que ya pagaste desde el corte.<br>
+    <b>Te falta apartar</b>: pago del mes − lo que ya apartaste. Eso se reparte en las quincenas que quedan antes de la fecha de pago, y es lo que sale en "Tarjetas" en tu plan.</p></div>`;
 }
 
 // =================== ANAQUEL + LISTA DE COMPRAS ===================
@@ -1577,9 +1597,9 @@ function vListaCompras(){
   const row=p=>{ const s=pst(p), lp=lastPrice(p);
     return `<div class="row" style="padding:10px 0;border-top:1px solid var(--ln);gap:10px;margin:0">
       <button class="chk ${p.cart?'on':''}" onclick="toggleCart('${p.id}')" aria-label="En el carrito">${p.cart?'✓':''}</button>
-      <span class="grow" style="min-width:0"><b>${esc(p.icon||'🛒')} ${esc(p.name)}</b><br><span class="mu sm">${p.cart?(lp?'la vez pasada '+money(lp.p):'en el carrito'):p.listed&&!p.empty&&s.c==='green'?'agregado a mano':s.t}</span></span>
+      <span class="grow" style="flex:1;min-width:0;text-align:left;cursor:pointer" onclick="sheetPantry('${p.id}')"><b>${esc(p.icon||'🛒')} ${esc(p.name)}</b> <span class="mu sm">✏️</span><br><span class="mu sm">${p.cart?(lp?'la vez pasada '+money(lp.p):'en el carrito'):p.listed&&!p.empty&&s.c==='green'?'agregado a mano':s.t}</span></span>
       <input type="number" inputmode="decimal" value="${priceOf(p)||''}" placeholder="$" onchange="setPrice('${p.id}',this.value)" style="max-width:86px;text-align:right;padding:8px 10px">
-      ${p.listed&&!p.empty&&!p.cart?`<button class="gh mini" style="padding:4px" onclick="unlist('${p.id}')">✕</button>`:''}</div>`; };
+      <button class="gh mini" style="padding:4px" onclick="quitarLista('${p.id}')" aria-label="Quitar">🗑</button></div>`; };
   return `<div class="tiles"><div class="tile t-deu" style="cursor:default"><small>🧾 Costaría todo</small><b>${money(tot)}</b><span>${L.length} producto${L.length===1?'':'s'}</span></div>
     <div class="tile t-fij" style="cursor:default"><small>🛒 En el carrito</small><b>${money(tc)}</b><span>${cart.length} de ${L.length}</span></div></div>
   <div class="card"><h2>🔴 Se terminó · por comprar</h2>${falta.map(row).join('')||'<p class="mu">Nada pendiente 🎉</p>'}
@@ -1588,6 +1608,9 @@ function vListaCompras(){
     <button class="ok full" style="margin-top:12px" onclick="finishShop()">✅ Terminar compra · ${money(tc)}</button></div>`:''}
   <p class="mu sm" style="text-align:center">Palomea lo que vas metiendo al carrito. Al terminar, se guarda el precio y la fecha, y la app aprende cuánto te dura cada cosa.</p>`;
 }
+function quitarLista(id){ const p=S.pantry.find(x=>x.id===id);
+  if(!confirm(`¿Quitar ${p.name} de la lista?\n\nAceptar = quitarlo de la lista (sigue en Anaquel).`)) return;
+  db({table:'pantry',action:'update',row:{listed:false,cart:false,empty:false,last_bought:todayISO()},match:{id}}); toast(`${p.name} quitado de la lista`); }
 function toggleCart(id){ const p=S.pantry.find(x=>x.id===id); db({table:'pantry',action:'update',row:{cart:!p.cart},match:{id}}); }
 function setPrice(id,v){ db({table:'pantry',action:'update',row:{price:num(v)||null},match:{id}}); }
 function unlist(id){ db({table:'pantry',action:'update',row:{listed:false},match:{id}}); }
@@ -1657,8 +1680,6 @@ function vMas(){
 function vConfig(){
   const cats=S.hh.categories||[];
   return `<div class="row"><h1>⚙️ Ajustes</h1></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y bancos</div><div class="mu">Dónde está tu dinero y tu patrimonio</div></div><span class="mu">›</span></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('movs')"><div class="ic" style="background:#fff7ed">🔎</div><div class="grow"><div class="nm">Movimientos</div><div class="mu">Buscar y corregir cualquier movimiento</div></div><span class="mu">›</span></div>
   <div class="card"><h2>👥 Personas</h2>${S.members.map(m=>`<div class="row"><input id="mn_${m.user_id}" value="${esc(m.display_name||'')}"><button class="mini sec" onclick="renameMember('${m.user_id}')">Guardar</button></div>`).join('')}
     <div class="row" style="margin-top:14px"><span>Código para invitar</span><span class="code">${esc(S.hh.invite_code)}</span></div></div>
   <div class="card"><h2>🧹 Empezar de cero</h2><p class="mu" style="margin-top:0">Borra todos los apartados, ingresos y gastos${S.who!=='Todos'?'':' de los dos'}. Bancos, categorías y personas se quedan.</p>
@@ -1791,8 +1812,8 @@ function sheetAcc(id,preType){
     <div class="grid2"><div><label>Día de corte</label><input id="a_cd" type="number" inputmode="numeric" min="1" max="31" value="${a.corte_day??''}" placeholder="Ej. 11" oninput="cardPreview()"></div><div><label>Día de pago (opcional)</label><input id="a_pd" type="number" inputmode="numeric" min="1" max="31" value="${a.pago_day??''}" placeholder="Si no sabes, vacío" oninput="cardPreview()"></div></div>
     <p class="mu sm" style="margin:6px 0 0">El día de corte es el "fin del periodo" de tu app del banco (ej. periodo 10 oct – 11 nov → corte día 11). Si no viene el día de pago, la app calcula 20 días después del corte, que es lo normal en México.</p>
     <div class="ins" id="a_prev" style="background:var(--prl);color:var(--pr);margin:10px 0 0"></div>
-    <div class="grid2"><div><label>Límite de crédito</label><input id="a_lim" type="number" inputmode="decimal" value="${a.limite??''}" placeholder="Opcional"></div><div><label>Saldo de tu último corte</label><input id="a_cb" type="number" inputmode="decimal" value="${a.corte_bal??''}" placeholder="Opcional"></div></div>
-    <p class="mu sm" style="margin:6px 0 0">El saldo al corte es lo que pagas para no generar intereses. Si no lo pones, la app lo calcula con tus gastos.</p>`
+    <div class="grid2"><div><label>Límite de crédito</label><input id="a_lim" type="number" inputmode="decimal" value="${a.limite??''}" placeholder="Opcional"></div><div><label>Pago de este mes (sin intereses)</label><input id="a_cb" type="number" inputmode="decimal" value="${a.corte_bal??''}" placeholder="Opcional"></div></div>
+    <p class="mu sm" style="margin:6px 0 0">Viene en tu estado de cuenta como "pago para no generar intereses". Si no lo pones, la app toma lo que debes en total.</p>`
   :`<label>${id==='new'?'Saldo de hoy':'Saldo real hoy'}</label><input id="a_ini" type="number" inputmode="decimal" value="${cur}" placeholder="$0">
     ${window._aty!=='vales'?`<div class="grid2"><div><label>Tope de apartados (opcional)</label><input id="a_tope" type="number" inputmode="decimal" value="${a.tope??''}"></div><div><label>Rendimiento % anual</label><input id="a_rate" type="number" inputmode="decimal" value="${a.rate??''}"></div></div>`:''}`}
   <label>Color</label><div class="chips" id="a_cols">${COLORS.map(c=>`<button class="chip ${c===a.color?'on':''}" style="background:${c};border-color:${c};width:38px;height:38px;padding:0" onclick="window._col='${c}';pickOn('a_cols',this)"></button>`).join('')}</div>
