@@ -888,18 +888,29 @@ function autoIncomes(){
 }
 function addPlanInc(){ const c=$('#pi_newc').value.trim(), v=num($('#pi_newv').value); if(!c||v<=0) return toast('Pon concepto y monto');
   const owner=S.who==='Compartido'?null:S.who==='Todos'?defOwner():S.who;
-  savePlan([...planInc(),{id:uuid(),c,v,owner,from:currentQ()}]); toast(`✅ ${c}: ${money(v)} cada quincena`); }
+  savePlan([...planInc(),{id:uuid(),c,v,owner,from:currentQ()}]); toast(`✅ ${c}: ${money(v)} cada quincena`);  refreshIncome(); }
 function editPlanInc(id){ const v=num($('#pi_v_'+id).value); if(v<=0) return; const q=currentQ(), x=planInc().find(i=>i.id===id);
   const ops=[{table:'households',action:'update',row:{plan:{...(S.hh.plan||{}),incomes:planInc().map(i=>i.id===id?{...i,v}:i)}},match:{id:S.hh.id}}];
   if(S.movs.some(m=>m.id===autoId(x,q))) ops.push({table:'movements',action:'update',row:{amount:v},match:{id:autoId(x,q)}});
-  db(ops); toast(`✅ ${x.c}: ${money(v)} cada quincena`); }
+  db(ops); toast(`✅ ${x.c}: ${money(v)} cada quincena`);  refreshIncome(); }
 function delPlanInc(id){ const x=planInc().find(i=>i.id===id), q=currentQ(); if(!confirm(`¿Quitar ${x.c} de tus ingresos de cada quincena?`)) return;
   const ops=[{table:'households',action:'update',row:{plan:{...(S.hh.plan||{}),incomes:planInc().filter(i=>i.id!==id)}},match:{id:S.hh.id}}];
   if(S.movs.some(m=>m.id===autoId(x,q))) ops.push({table:'movements',action:'delete',match:{id:autoId(x,q)}});
-  db(ops); }
-function incomeCard(){
+  db(ops); refreshIncome(); }
+function incomeSheet(){ openSheet(`<div id="pi_sheet"></div>${incomeCard(true)}`); }
+function refreshIncome(){ if($('#pi_sheet')) setTimeout(incomeSheet,30); }
+function incomeMini(){
   const xs=planMine(), tot=sum(xs.map(x=>+x.v));
-  return `<div class="card"><h2>💵 Mis ingresos de cada quincena</h2>
+  return `<div class="hero" style="background:linear-gradient(135deg,#0f766e,#0891b2 60%,#4f46e5);padding:16px 18px;position:relative">
+    <button onclick="incomeSheet()" aria-label="Editar ingresos" style="position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:50%;padding:0;background:rgba(255,255,255,.25);font-size:22px;line-height:38px">＋</button>
+    <div class="mu">💵 De dónde vienen tus ingresos</div>
+    ${xs.length?`<div style="margin-top:8px">${xs.map(x=>`<div class="row sm" style="padding:2px 44px 2px 0;margin:0"><span>${esc(x.c)}${S.who==='Todos'&&x.owner?` <span style="opacity:.75">· ${esc(x.owner)}</span>`:''}</span><b>${money(x.v)}</b></div>`).join('')}
+      <div class="row" style="border-top:1px solid rgba(255,255,255,.3);margin-top:6px;padding:6px 44px 0 0"><span class="b">Total cada quincena</span><b style="font-size:18px">${money(tot)}</b></div></div>`
+      :`<div class="sm" style="margin-top:8px;opacity:.9">Toca ＋ para poner lo que te entra cada quincena.</div>`}</div>`;
+}
+function incomeCard(inSheet){
+  const xs=planMine(), tot=sum(xs.map(x=>+x.v));
+  return `<div class="${inSheet?'':'card'}"><h${inSheet?1:2}>💵 Mis ingresos de cada quincena</h${inSheet?1:2}>
     ${xs.map(x=>`<div class="row" style="padding:8px 0;border-top:1px solid var(--ln);gap:8px">
       <span class="grow"><b>${esc(x.c)}</b>${S.who==='Todos'&&x.owner?` <span class="mu sm">· ${esc(x.owner)}</span>`:''}</span>
       <input id="pi_v_${x.id}" type="number" inputmode="decimal" value="${x.v}" onchange="editPlanInc('${x.id}')" style="max-width:120px;text-align:right;padding:8px 10px">
@@ -1048,15 +1059,16 @@ function goalActions(g){
     <button class="mini gh" onclick="sheetEdit('${g.id}')">✏️ Editar</button></div>`;
 }
 function perQuin(g,s){ if(s.card) return s.cuota||0; if(g.kind==='fijo') return +g.cuota||perQ(g); return s.cuotaQ||s.cuota||0; }
-function faltaQ(g,s){ s=s||gst(g); const pq=perQuin(g,s); let f=Math.max(0,pq-s.aportQ); const T=s.tgt; if(T&&!(g.kind==='pago'&&!isCyc(g))) f=Math.min(f,Math.max(0,T-s.saldo)); return Math.round(f); }
+function faltaQ(g,s){ s=s||gst(g); const pq=perQuin(g,s); let f=Math.max(0,pq-s.aportQ); const T=s.tgt; if(T&&!(g.kind==='pago'&&!isCyc(g))) f=Math.min(f,Math.max(0,T-s.saldo));
+  if(g.kind==='pago'&&!isCyc(g)&&+g.target) f=Math.min(f,Math.max(0,+g.target-s.pagado-s.saldo)); return Math.round(f); }
 function exRow(g){ // renglón tipo Excel
   const s=gst(g), [bg,fg]=KCOL[g.kind], debt=g.kind==='pago'&&!isCyc(g), T=debt?+g.target:s.tgt, tienes=s.saldo, pq=perQuin(g,s), f=faltaQ(g,s);
-  const col=s.stc==='red'?'var(--rd)':fg, pct=T?Math.min(100,Math.max(0,(debt?s.avance:tienes)/T*100)):0;
+  const col=debt?'#ea580c':s.stc==='red'?'var(--rd)':fg, pct=T?Math.min(100,Math.max(0,(debt?s.avance:tienes)/T*100)):0;
   return `<div class="item" onclick="sheetGoal('${g.id}')" style="cursor:pointer"><div class="ic" style="background:${bg};color:${fg}">${esc(g.icon||'🎯')}</div><div class="grow">
     <div class="row"><span class="nm">${esc(g.name)}</span><span style="white-space:nowrap"><span class="mu sm">tienes </span><b>${money(tienes)}</b></span></div>
     <div class="mu sm">${T?`${debt?'Debes':g.kind==='meta'?'Meta':'Pagar'} ${money(debt?Math.max(0,T-s.pagado):T)}`:''}${s.due?` · ${g.kind==='meta'?'para el':'vence'} ${fmtD(s.due)}`:''}</div>
     ${T?`<div class="bar" style="margin-top:6px"><i style="width:${pct}%;background:${col}"></i></div>`:''}
-    <div class="row" style="margin-top:6px;gap:6px"><span class="sm">${pq>0.5?`Cada quincena <b>${money(pq)}</b> · llevas ${money(s.aportQ)}`:'Sin cuota por quincena'}</span>
+    <div class="row" style="margin-top:6px;gap:6px"><span class="sm">${pq>0.5?`Cada quincena <b>${money(pq)}</b> · esta quincena metiste ${money(s.aportQ)}`:'Sin cuota por quincena'}</span>
       ${pq>0.5?(f>0.5?`<button class="mini ok" style="padding:6px 10px;white-space:nowrap" onclick="event.stopPropagation();quickAp('${g.id}',${f})">＋ ${money(f)}</button>`:'<span class="st green" style="font-size:11px">✓ completo</span>'):''}</div>
     ${g.kind!=='meta'?`<div style="margin-top:8px" onclick="event.stopPropagation()"><button class="mini sec" onclick="yaPagado('${g.id}')">✓ Ya se pagó${toPay(g,s)>0.5?' · '+money(toPay(g,s)):''}</button></div>`:''}</div></div>`;
 }
@@ -1080,17 +1092,16 @@ function apartarTodo(){
   db({table:'movements',action:'insert',row:rows}); toast(`✅ ${money(tot)} apartados · te quedan ${money(libre())} libres`);
 }
 function vApartados(){
-  const q=currentQ(), gs=activeGoals().filter(g=>S.bank==='Todos'||g.account===S.bank);
+  const q=currentQ(), gs=activeGoals();
   const fijos=gs.filter(g=>g.kind==='fijo'), deudas=gs.filter(g=>g.kind==='pago'&&!ex(g).card&&!isOldCard(g)), metas=gs.filter(g=>g.kind==='meta'), olds=gs.filter(isOldCard);
   const cards=liveAccs().filter(a=>atype(a)==='tdc'&&accMine(a)), cardGs=activeGoals().filter(g=>ex(g).card);
   const arch=S.goals.filter(g=>g.archived&&mine(g));
   const P=list=>sum(list.map(g=>perQuin(g,gst(g))));
   const faltaTot=sum(activeGoals().map(g=>faltaQ(g)));
-  const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span>${list.length?money(P(list))+'/q':''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
+  const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span style="text-align:right;line-height:1.25">${list.length?`<span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(sum(list.map(g=>gst(g).saldo)))}</b></span><br><span style="font-size:11px">${money(P(list))} por quincena</span>`:''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
   return `<div class="card" style="background:linear-gradient(135deg,#eef2ff,#f5f3ff)"><div class="row"><span class="b">🎯 Te falta apartar esta quincena</span><b style="font-size:20px">${money(faltaTot)}</b></div>
-    <div class="mu sm">Tu libre ahora: ${money(libre())}</div>
-    ${faltaTot>0.5?`<button class="full" style="margin-top:10px" onclick="apartarTodo()">Apartar todo · ${money(faltaTot)}</button>`:'<p class="mu" style="margin:8px 0 0">✓ Ya apartaste todo lo de esta quincena</p>'}</div>
-  <div class="chips">${['Todos',...moneyAccs().map(a=>a.name)].map(b=>`<button class="chip ${S.bank===b?'on':''}" onclick="S.bank='${esc(b)}';render()">${b==='Todos'?'🏦 Todos los bancos':`<i class="dot" style="background:${accColor(b)}"></i> ${esc(b)}`}</button>`).join('')}</div>
+    <div class="mu sm">Lo que te toca meter a cada apartado esta quincena, sumado.</div>
+    ${faltaTot>0.5?`<button class="full" style="margin-top:10px" onclick="apartarTodo()">Apartar todo lo que falta · ${money(faltaTot)}</button>`:'<p class="mu" style="margin:8px 0 0">✓ Ya apartaste todo lo de esta quincena</p>'}</div>
   ${sec('📆 Gastos fijos',fijos)}
   ${sec('🤝 Deudas',deudas)}
   ${sec('🎯 Metas',metas)}
@@ -1528,9 +1539,8 @@ function vQuincena(){
   <div class="hero"><div class="mu">💸 Te queda libre esta quincena</div>
     <div class="big">${money(libreP)}</div>
     <div class="formula">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}</div>
-    <div class="grid2" style="margin-top:10px;gap:8px">
-      <div class="pill" onclick="S.fin='apartados';render()" style="cursor:pointer"><span class="mu sm">Libre ahorita</span><b>${money(l)}</b></div>
-      <div class="pill" onclick="S.fin='apartados';render()" style="cursor:pointer"><span class="mu sm">Falta apartar</span><b>${money(D.faltaTot)}</b></div></div></div>
+    ${D.faltaTot>0.5?`<div class="pill" onclick="S.fin='apartados';render()" style="cursor:pointer;margin-top:10px;display:flex;justify-content:space-between;align-items:center"><span class="sm">🎯 Te falta apartar esta quincena</span><b>${money(D.faltaTot)} ›</b></div>`:`<div class="pill" style="margin-top:10px"><span class="sm">✓ Ya apartaste todo lo de esta quincena</span></div>`}</div>
+  ${incomeMini()}
   ${libreP<-0.5?`<div class="alert">⚠️ <span>Tus apartados piden ${money(-libreP)} más de lo que te entra. Baja alguna cuota o agrega un ingreso.</span></div>`:''}
   <div class="tiles">
     <div class="tile t-fij" onclick="S.fin='apartados';render()"><small>📆 Gastos fijos</small><b>${D.fij.length?`${fijOk} de ${D.fij.length} listos`:'—'}</b><span>${fijFalta>0.5?'faltan '+money(fijFalta):D.fij.length?'todo apartado ✓':'sin gastos fijos'}</span></div>
@@ -1539,7 +1549,6 @@ function vQuincena(){
     <div class="tile t-met" onclick="S.fin='apartados';render()"><small>🎯 Metas</small><b>${mets[0]?esc(mets[0].g.name)+' '+mets[0].pct+'%':'—'}</b><span>${mets[1]?esc(mets[1].g.name)+' '+mets[1].pct+'%':D.met.length?'':'crea una meta'}</span></div>
   </div>
   ${alerts.map(([g,s])=>`<div class="alert" onclick="sheetGoal('${g.id}')" style="cursor:pointer">${esc(g.icon||'⚠️')} <span><b>${esc(g.name)}</b>: ${s.st}</span></div>`).join('')}
-  ${incomeCard()}
   ${prox.length?`<div class="card"><h2>📆 Lo que viene</h2>${prox.map(g=>goalRow(g,{click:1,dogs:1})).join('')}</div>`:''}`;
 }
 function vTarjetas(){
@@ -1634,7 +1643,6 @@ function vMas(){
   const n=S.pantry.filter(p=>pst(p).c!=='green').length;
   return `<h1>☰ Más</h1>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('cuentas')"><div class="ic" style="background:#ccfbf1">🏦</div><div class="grow"><div class="nm">Cuentas y tarjetas</div><div class="mu">Saldos reales, tarjetas, vales y patrimonio</div></div></div>
-  <div class="card item" style="cursor:pointer;padding:16px" onclick="go('movs')"><div class="ic" style="background:#fff7ed">🔎</div><div class="grow"><div class="nm">Movimientos</div><div class="mu">Buscar y editar cualquier movimiento</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('anaquel')"><div class="ic" style="background:var(--okl)">🧺</div><div class="grow"><div class="row"><span class="nm">Vida de anaquel</span>${n?`<span class="st red">${n} por comprar</span>`:'<span class="st green">Todo bien</span>'}</div><div class="mu">Lo que hay en casa, cuándo se acaba y cuánto cuesta</div></div></div>
   <div class="card item" style="cursor:pointer;padding:16px" onclick="go('config')"><div class="ic" style="background:var(--bg)">⚙️</div><div class="grow"><div class="nm">Ajustes</div><div class="mu">Categorías, personas y código para invitar</div></div></div>
   <img src="logo.svg" alt="Finanzas con Lia y Ted" style="width:100%;display:block;margin-top:6px;opacity:.95">`;
