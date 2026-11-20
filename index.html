@@ -1065,7 +1065,7 @@ function goalActions(g){
     <button class="mini gh" onclick="sheetEdit('${g.id}')">✏️ Editar</button></div>`;
 }
 function perQuin(g,s){ if(s.card) return s.cuota||0; if(g.kind==='fijo') return +g.cuota||perQ(g); return s.cuotaQ||s.cuota||0; }
-function faltaQ(g,s){ s=s||gst(g); const pq=perQuin(g,s); let f=Math.max(0,pq-s.aportQ); const T=s.tgt; if(T&&!(g.kind==='pago'&&!isCyc(g))) f=Math.min(f,Math.max(0,T-s.saldo));
+function faltaQ(g,s){ const sq=(S.hh.plan||{}).startQ; if(sq&&currentQ()<sq) return 0; s=s||gst(g); const pq=perQuin(g,s); let f=Math.max(0,pq-s.aportQ); const T=s.tgt; if(T&&!(g.kind==='pago'&&!isCyc(g))) f=Math.min(f,Math.max(0,T-s.saldo));
   if(g.kind==='pago'&&!isCyc(g)&&+g.target) f=Math.min(f,Math.max(0,+g.target-s.pagado-s.saldo)); return Math.round(f); }
 function exRow(g){ // renglón tipo Excel
   const s=gst(g), [bg,fg]=KCOL[g.kind], debt=g.kind==='pago'&&!isCyc(g), T=debt?+g.target:s.tgt, tienes=s.saldo, pq=perQuin(g,s), f=faltaQ(g,s);
@@ -1539,9 +1539,11 @@ function vQuincena(){
   const prox=D.AG.filter(g=>g.kind!=='meta'&&!ex(g).card).map(g=>[g,gst(g)]).filter(([g,s])=>s.due&&toPay(g,s)>0.5).sort((a,b)=>a[1].due<b[1].due?-1:1).slice(0,3).map(x=>x[0]);
   const fr=(t,v,neg)=>`<div class="row"><span>${t}</span><b>${neg?'− ':''}${money(v)}</b></div>`;
   return `
-  <div class="hero"><div class="mu">💸 Te queda libre esta quincena</div>
-    <div class="big">${money(libreP)}</div>
-    <div class="formula">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}</div>
+  <div class="hero"><div class="mu">💸 Tu dinero libre (sin apartar)</div>
+    <div class="big">${money(l)}</div>
+    <div class="mu sm" style="margin-top:2px">${l<-0.5?'Apartaste o pagaste más de lo que te entró':l>0.5?'Esto es lo que te queda para gastar o apartar':'Todo tu dinero ya está repartido ✓'}</div>
+    <div class="mu sm" style="margin-top:12px;font-weight:700">📋 Tu plan de cada quincena</div>
+    <div class="formula" style="margin-top:6px">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}<div class="row" style="border-top:1px solid rgba(255,255,255,.3);margin-top:4px;padding-top:6px"><span>= Te quedaría libre</span><b>${money(libreP)}</b></div></div>
   </div>
   ${incomeMini()}
   ${libreP<-0.5?`<div class="alert">⚠️ <span>Tus apartados piden ${money(-libreP)} más de lo que te entra. Baja alguna cuota o agrega un ingreso.</span></div>`:''}
@@ -1604,7 +1606,7 @@ function finishShop(){
 // =================== ANÁLISIS (v19): tu quincena, ingresos, metas, deudas, patrimonio, despensa ===================
 function hb(lb,v,max,col,txt){ return `<div class="hbar"><span>${lb}</span><div class="tr"><i style="width:${max?Math.min(100,Math.max(0,v/max*100)):0}%;background:${col}"></i></div><b>${txt??money(v)}</b></div>`; }
 function vAnalisis2(){
-  const q=currentQ(), D=quinData(), need=D.pF+D.pC+D.pD+D.pM, qs=[], f0=qOf(S.movs.reduce((a,x)=>x.date<a?x.date:a,todayISO())); for(let i=5;i>=0;i--){ const x=shiftQ(q,-i); if(x>=f0) qs.push(x); }
+  const q=currentQ(), D=quinData(), need=D.pF+D.pC+D.pD+D.pM, qs=[], f0=qOf(S.movs.reduce((a,x)=>x.date<a?x.date:a,todayISO())); for(let i=5;i>=0;i--){ const x=shiftQ(q,-i); if(x>=f0&&x>=((S.hh.plan||{}).startQ||'')) qs.push(x); }
   const apQ=x=>apartadoQ(x)+sumKind('retira',x);
   const cum=qs.map(x=>({q:x,ap:apQ(x),pct:need?apQ(x)/need*100:0}));
   let streak=0; for(let i=cum.length-2;i>=0;i--){ if(cum[i].pct>=90) streak++; else break; }
