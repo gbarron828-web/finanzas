@@ -463,7 +463,7 @@ async function loadAll(){
 async function refresh(){ if(!sb||!S.hh||!navigator.onLine||queue().length) return; try{ await withTimeout(loadAll(),15000); render(); }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) { flush(); refresh(); } });
 
-function render(){
+function render(){ try{ if(S.hh&&S.user&&S.movs) autoIncomes(); }catch(e){ console.error(e); }
   if(!S.hh) return;
   $('#nav').hidden=false;
   const navT={anaquel:'mas',config:'mas',cuentas:'mas',movs:'mas',repartir:'inicio',revision:'inicio'}[S.tab]||S.tab; document.querySelectorAll('#nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===navT));
@@ -845,31 +845,44 @@ function todayCard(){
     <div class="mu sm" style="margin-top:6px">${L.spentToday>0.5?`Hoy llevas ${money(L.spentToday)} · `:''}${L.bolsa<-0.5?`<b class="neg">Vas ${money(-L.bolsa)} arriba</b>; mañana tendrás ${money(tomorrow)}`:L.acum>0.5?`Traes ${money(L.acum)} acumulado de días anteriores`:L.acum<-0.5?`Se te descuentan ${money(-L.acum)} de días anteriores`:'Vas justo en tu límite'}${L.capped?` · topado a tu libre (${money(L.lib)})`:''}</div>
     ${L.d7>=3?`<div class="mu sm" style="margin-top:4px">Últimos ${L.d7} días: ${money(L.avg7)}/día · ${L.avg7<=L.amt+0.5?`<span class="pos">${money(L.amt-L.avg7)}/día abajo del límite 👏</span>`:`<span class="neg">${money(L.avg7-L.amt)}/día arriba del límite</span>`}${L.avg7>0.5?` · a ese ritmo tu libre dura ~${Math.max(0,Math.floor(L.lib/L.avg7))} días`:''}</div>`:''}`; }).join('')}</div>`;
 }
-// ---------- PLAN DE INGRESOS (editable, como tu Excel) ----------
+// ---------- INGRESOS FIJOS DE CADA QUINCENA (como tu Excel) ----------
+// Lo que pones aquí se suma solo cada quincena (día 15 y 30). No tienes que marcar nada.
 const planInc = () => ((S.hh.plan||{}).incomes||[]);
 const planMine = () => planInc().filter(x=>S.who==='Todos'||(x.owner||'Compartido')===S.who);
 function savePlan(incomes){ db({table:'households',action:'update',row:{plan:{...(S.hh.plan||{}),incomes}},match:{id:S.hh.id}}); }
-function recvOf(x){ const from=addDays(todayISO(),-11); return S.movs.find(m=>m.kind==='ingreso'&&(m.category||'')===x.c&&movOwner(m)===(x.owner||'Compartido')&&m.date>=from); }
-function toggleRecv(id){ const x=planInc().find(i=>i.id===id); if(!x) return; const r=recvOf(x);
-  if(r){ if(!confirm(`¿Quitar el ingreso de ${x.c} (${money(r.amount)}) de hoy?`)) return; db({table:'movements',action:'delete',match:{id:r.id}}); return toast('Quitado'); }
-  const v=num($('#pi_v_'+id)?.value)||x.v, owner=x.owner||defOwner();
-  db({table:'movements',action:'insert',row:{goal_id:null,kind:'ingreso',amount:v,account:homeAcc(owner)||(moneyAccs()[0]||{}).name||'Banorte',category:x.c,owner,date:todayISO()}});
-  toast(`💵 ${x.c}: ${money(v)} · ya puedes apartar`); }
+function detId(str){ // id fijo por concepto+quincena: así nunca se duplica aunque abras la app en dos celulares
+  let h=''; for(let k=0;k<4;k++){ let x=0x811c9dc5^k*0x9e3779b1; for(const ch of str+k){ x^=ch.charCodeAt(0); x=Math.imul(x,0x01000193)>>>0; } h+=x.toString(16).padStart(8,'0'); }
+  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`; }
+const autoId = (x,q) => detId(x.id+'|'+q);
+function autoIncomes(){
+  if(!S.hh||!S.user) return; const q=currentQ(); if(S._autoQ===q+JSON.stringify(planInc())) return; S._autoQ=q+JSON.stringify(planInc());
+  const rows=[];
+  for(const x of planInc()){ if(x.from&&q<x.from) continue; const owner=x.owner||'Compartido', id=autoId(x,q);
+    if(S.movs.some(m=>m.id===id||(m.kind==='ingreso'&&(m.category||'')===x.c&&movOwner(m)===owner&&inQ(m,q)))) continue;
+    rows.push({id,goal_id:null,kind:'ingreso',amount:+x.v,account:homeAcc(owner)||(moneyAccs()[0]||{}).name||'Banorte',category:x.c,owner:x.owner||null,date:q,note:'Ingreso fijo'}); }
+  if(rows.length) db({table:'movements',action:'insert',row:rows});
+}
 function addPlanInc(){ const c=$('#pi_newc').value.trim(), v=num($('#pi_newv').value); if(!c||v<=0) return toast('Pon concepto y monto');
-  savePlan([...planInc(),{id:uuid(),c,v,owner:S.who==='Todos'||S.who==='Compartido'?(S.who==='Compartido'?null:defOwner()):S.who}]); }
-function editPlanInc(id){ const v=num($('#pi_v_'+id).value); if(v<=0) return; savePlan(planInc().map(x=>x.id===id?{...x,v}:x)); }
-function delPlanInc(id){ const x=planInc().find(i=>i.id===id); if(!confirm(`¿Quitar ${x.c} de tus ingresos?`)) return; savePlan(planInc().filter(i=>i.id!==id)); }
+  const owner=S.who==='Compartido'?null:S.who==='Todos'?defOwner():S.who;
+  savePlan([...planInc(),{id:uuid(),c,v,owner,from:currentQ()}]); toast(`✅ ${c}: ${money(v)} cada quincena`); }
+function editPlanInc(id){ const v=num($('#pi_v_'+id).value); if(v<=0) return; const q=currentQ(), x=planInc().find(i=>i.id===id);
+  const ops=[{table:'households',action:'update',row:{plan:{...(S.hh.plan||{}),incomes:planInc().map(i=>i.id===id?{...i,v}:i)}},match:{id:S.hh.id}}];
+  if(S.movs.some(m=>m.id===autoId(x,q))) ops.push({table:'movements',action:'update',row:{amount:v},match:{id:autoId(x,q)}});
+  db(ops); toast(`✅ ${x.c}: ${money(v)} cada quincena`); }
+function delPlanInc(id){ const x=planInc().find(i=>i.id===id), q=currentQ(); if(!confirm(`¿Quitar ${x.c} de tus ingresos de cada quincena?`)) return;
+  const ops=[{table:'households',action:'update',row:{plan:{...(S.hh.plan||{}),incomes:planInc().filter(i=>i.id!==id)}},match:{id:S.hh.id}}];
+  if(S.movs.some(m=>m.id===autoId(x,q))) ops.push({table:'movements',action:'delete',match:{id:autoId(x,q)}});
+  db(ops); }
 function incomeCard(){
   const xs=planMine(), tot=sum(xs.map(x=>+x.v));
-  return `<div class="card"><h2>💵 Mis ingresos de la quincena</h2>
-    ${xs.map(x=>{ const r=recvOf(x); return `<div class="row" style="padding:8px 0;border-top:1px solid var(--ln);gap:8px">
-      <button class="mini ${r?'ok':'sec'}" style="width:38px;height:38px;padding:0;border-radius:50%;flex:none" onclick="toggleRecv('${x.id}')" title="${r?'Ya cayó':'Marcar que ya cayó'}">${r?'✓':'○'}</button>
-      <span class="grow"><b>${esc(x.c)}</b>${S.who==='Todos'&&x.owner?`<br><span class="mu sm">${esc(x.owner)}</span>`:''}${r?`<br><span class="sm pos">cayó ${fmtD(r.date)}</span>`:''}</span>
-      <input id="pi_v_${x.id}" type="number" inputmode="decimal" value="${x.v}" onchange="editPlanInc('${x.id}')" style="max-width:110px;text-align:right;padding:8px 10px">
-      <button class="gh mini" style="padding:6px" onclick="delPlanInc('${x.id}')">🗑</button></div>`; }).join('')}
+  return `<div class="card"><h2>💵 Mis ingresos de cada quincena</h2>
+    ${xs.map(x=>`<div class="row" style="padding:8px 0;border-top:1px solid var(--ln);gap:8px">
+      <span class="grow"><b>${esc(x.c)}</b>${S.who==='Todos'&&x.owner?` <span class="mu sm">· ${esc(x.owner)}</span>`:''}</span>
+      <input id="pi_v_${x.id}" type="number" inputmode="decimal" value="${x.v}" onchange="editPlanInc('${x.id}')" style="max-width:120px;text-align:right;padding:8px 10px">
+      <button class="gh mini" style="padding:6px" onclick="delPlanInc('${x.id}')">🗑</button></div>`).join('')}
     <div class="row" style="padding:8px 0;border-top:1px solid var(--ln);gap:8px"><input id="pi_newc" placeholder="Concepto (ej. Nómina)" style="padding:8px 10px"><input id="pi_newv" type="number" inputmode="decimal" placeholder="$" style="max-width:100px;padding:8px 10px"><button class="mini" onclick="addPlanInc()">＋</button></div>
-    <div class="row" style="border-top:2px solid var(--ln);padding-top:8px"><span class="b">Total</span><b style="font-size:20px">${money(tot)}</b></div>
-    <p class="mu sm" style="margin:6px 0 0">${xs.length?'Toca ○ cuando te caiga cada uno; se suma a tu libre para apartar.':'Agrega lo que te entra cada quincena: nómina, Cadil, Moni…'}</p></div>`;
+    <div class="row" style="border-top:2px solid var(--ln);padding-top:8px"><span class="b">Total cada quincena</span><b style="font-size:20px">${money(tot)}</b></div>
+    <p class="mu sm" style="margin:6px 0 0">${xs.length?'Se suman solos cada quincena (día 15 y 30). Si un monto cambia, edítalo aquí.':'Agrega lo que te entra cada quincena: nómina, Cadil, Moni…'}</p></div>`;
 }
 function vInicio(){
   const q=currentQ(), nq=shiftQ(q,1), l=libre(), dl=daysLeft(), gs=activeGoals().filter(g=>!ex(g).card);   // tarjetas viven en Cuentas
