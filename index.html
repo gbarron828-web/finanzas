@@ -1119,11 +1119,11 @@ function vApartados(){
   const sec=(t,list,extra='')=>list.length||extra?`<div class="sect row"><span>${t}</span><span style="text-align:right;line-height:1.25">${list.length?`<span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(sum(list.map(g=>gst(g).saldo)))}</b></span><br><span style="font-size:11px">${money(P(list))} por quincena</span>`:''}</span></div><div class="card">${list.map(exRow).join('')}${extra}</div>`:'';
   return `
   ${sec('📆 Gastos fijos',fijos)}
+  ${sec('🤝 Deudas',deudas)}
+  ${sec('🎯 Metas',metas)}
   ${(()=>{ const cs=liveAccs().filter(a=>atype(a)==='tdc'&&accMine(a)); if(!cs.length&&!olds.length) return '';
     const ap=sum(cs.map(a=>{ const g=cardGoals(a.name).find(x=>!x.archived); return g?gst(g).saldo:0; }));
     return `<div class="sect row"><span>💳 Tarjetas</span><span style="text-align:right;line-height:1.25"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">tienes <b>${money(ap)}</b></span><br><span style="font-size:11px">debes ${money(sum(cs.map(a=>cardInfo(a).debt)))}</span></span></div><div class="card">${cs.map(a=>cardRowEx(a,1)).join('')}${olds.map(exRow).join('')}</div>`; })()}
-  ${sec('🤝 Deudas',deudas)}
-  ${sec('🎯 Metas',metas)}
   <button class="sec full" style="margin-bottom:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button>
   ${!gs.length&&!cards.length?`<div class="card empty"><span>🎯</span>${S.goals.length?'No hay apartados con este filtro.':'Crea tu primer apartado: renta, internet, Navidad, fondo médico…'}<br><button style="margin-top:12px" onclick="sheetEdit('new')">＋ Nuevo apartado</button></div>`:''}
   ${arch.length?`<div class="sect">🗄 Archivados</div><div class="card">${arch.map(g=>`<div class="row"><span>${esc(g.icon||'')} ${esc(g.name)}</span><button class="gh mini" onclick="db({table:'goals',action:'update',row:{archived:false},match:{id:'${g.id}'}})">Restaurar</button></div>`).join('')}</div>`:''}`;
