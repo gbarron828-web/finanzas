@@ -1556,11 +1556,10 @@ function vQuincena(){
   const prox=D.AG.filter(g=>g.kind!=='meta'&&!ex(g).card).map(g=>[g,gst(g)]).filter(([g,s])=>s.due&&toPay(g,s)>0.5).sort((a,b)=>a[1].due<b[1].due?-1:1).slice(0,3).map(x=>x[0]);
   const fr=(t,v,neg)=>`<div class="row"><span>${t}</span><b>${neg?'− ':''}${money(v)}</b></div>`;
   return `
-  <div class="hero"><div class="mu">💸 Tu dinero libre (sin apartar)</div>
-    <div class="big">${money(l)}</div>
-    <div class="mu sm" style="margin-top:2px">${l<-0.5?'Apartaste o pagaste más de lo que te entró':l>0.5?'Esto es lo que te queda para gastar o apartar':'Todo tu dinero ya está repartido ✓'}</div>
-    <div class="mu sm" style="margin-top:12px;font-weight:700">📋 Tu plan de cada quincena</div>
-    <div class="formula" style="margin-top:6px">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}<div class="row" style="border-top:1px solid rgba(255,255,255,.3);margin-top:4px;padding-top:6px"><span>= Te quedaría libre</span><b>${money(libreP)}</b></div></div>
+  <div class="hero"><div class="mu">💸 Te queda libre cada quincena</div>
+    <div class="big">${money(libreP)}</div>
+    <div class="mu sm" style="margin-top:2px">${libreP<-0.5?'Tus apartados piden más de lo que te entra':'Lo que te sobra después de apartar todo'}</div>
+    <div class="formula" style="margin-top:6px">${fr('💵 Ingresos',D.pInc)}${fr('📆 Gastos fijos',D.pF,1)}${D.pC>0.5?fr('💳 Tarjetas',D.pC,1):''}${fr('🤝 Deudas',D.pD,1)}${fr('🎯 Metas',D.pM,1)}</div>
   </div>
   ${incomeMini()}
   ${libreP<-0.5?`<div class="alert">⚠️ <span>Tus apartados piden ${money(-libreP)} más de lo que te entra. Baja alguna cuota o agrega un ingreso.</span></div>`:''}
